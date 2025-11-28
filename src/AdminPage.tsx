@@ -2626,73 +2626,84 @@ const AdminPage: React.FC = () => {
     }
 
     return (
-        <div className="page-card page-card--admin">
-            <header
-                style={{
-                    marginBottom: "1rem",
-                    borderBottom: "1px solid #e5e7eb",
-                    paddingBottom: "0.75rem",
-                }}
-            >
-                <h2 style={{ margin: 0 }}>Adminpanel</h2>
-                <p
+        <div
+            style={{
+                minHeight: "100vh",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "center",
+                background: "#f5f5f7",
+                padding: "1.5rem 1rem",
+            }}
+        >
+            <div className="page-card page-card--admin">
+                <header
                     style={{
-                        margin: "0.25rem 0 0.75rem",
-                        fontSize: "0.85rem",
-                        color: "#6b7280",
+                        marginBottom: "1rem",
+                        borderBottom: "1px solid #e5e7eb",
+                        paddingBottom: "0.75rem",
                     }}
                 >
-                    Oppsett av krav per termin, administrasjon av brukere og
-                    forhåndsvisning for lærere.
-                </p>
-
-                {/* Øverste knapper: Oppsett / Brukere */}
-                <div
-                    style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                    }}
-                >
-                    <button
-                        type="button"
-                        onClick={() => setMainTab("setup")}
+                    <h2 style={{ margin: 0 }}>Adminpanel</h2>
+                    <p
                         style={{
-                            flex: 1,
-                            padding: "0.35rem 0.5rem",
-                            borderRadius: "999px",
-                            border: "1px solid #e5e7eb",
-                            background:
-                                mainTab === "setup" ? "#b91c1c" : "#ffffff",
-                            color: mainTab === "setup" ? "#ffffff" : "#111827",
+                            margin: "0.25rem 0 0.75rem",
                             fontSize: "0.85rem",
-                            cursor: "pointer",
+                            color: "#6b7280",
                         }}
                     >
-                        Oppmøtebøker
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setMainTab("users")}
+                        Oppsett av krav per termin, administrasjon av brukere og
+                        forhåndsvisning for lærere.
+                    </p>
+
+                    {/* Øverste knapper: Oppsett / Brukere */}
+                    <div
                         style={{
-                            flex: 1,
-                            padding: "0.35rem 0.5rem",
-                            borderRadius: "999px",
-                            border: "1px solid #e5e7eb",
-                            background:
-                                mainTab === "users" ? "#b91c1c" : "#ffffff",
-                            color: mainTab === "users" ? "#ffffff" : "#111827",
-                            fontSize: "0.85rem",
-                            cursor: "pointer",
+                            display: "flex",
+                            gap: "0.5rem",
                         }}
                     >
-                        Brukere
-                    </button>
-                </div>
-            </header>
+                        <button
+                            type="button"
+                            onClick={() => setMainTab("setup")}
+                            style={{
+                                flex: 1,
+                                padding: "0.35rem 0.5rem",
+                                borderRadius: "999px",
+                                border: "1px solid #e5e7eb",
+                                background:
+                                    mainTab === "setup" ? "#b91c1c" : "#ffffff",
+                                color: mainTab === "setup" ? "#ffffff" : "#111827",
+                                fontSize: "0.85rem",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Oppmøtebøker
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setMainTab("users")}
+                            style={{
+                                flex: 1,
+                                padding: "0.35rem 0.5rem",
+                                borderRadius: "999px",
+                                border: "1px solid #e5e7eb",
+                                background:
+                                    mainTab === "users" ? "#b91c1c" : "#ffffff",
+                                color: mainTab === "users" ? "#ffffff" : "#111827",
+                                fontSize: "0.85rem",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Brukere
+                        </button>
+                    </div>
+                </header>
 
-            {mainTab === "setup" && <TermSetup />}
-            {mainTab === "users" && <UsersAdmin />}
-            {mainTab === "teacherView" && <TeacherPreview />}
+                {mainTab === "setup" && <TermSetup />}
+                {mainTab === "users" && <UsersAdmin />}
+                {mainTab === "teacherView" && <TeacherPreview />}
+            </div>
         </div>
     );
 };

@@ -74,6 +74,7 @@ blockquote {
 .teacher-field:focus {
   outline: none;
   border-color: #2EC483;
+  box-shadow: 0 0 0 3px rgba(46, 196, 131, 0.15);
 }
 .teacher-static {
   width: 100%;
@@ -97,95 +98,4 @@ blockquote {
   max-height: 220px;
   overflow-y: auto;
   box-shadow: 0 10px 20px rgba(0,0,0,0.08);
-}
-
-/* Student page styles using UiO palette */
-.student-field {
-  padding: 0.5rem 0.8rem;
-  border-radius: 0.5rem;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-}
-.student-field:focus {
-  outline: none;
-  border-color: #2EC483;
-}
-
-.student-btn {
-  padding: 0.5rem 1.2rem;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  font-weight: 500;
-}
-.student-btn--primary {
-  background: #2EC483;
-  color: #000000;
-}
-.student-btn--secondary {
-  background: #CEFFDF;
-  color: #000000;
-  border: 1px solid #6CE1AB;
-}
-
-.status-card {
-  text-align: center;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  margin: 0 auto;
-}
-.status-card--success {
-  background: #CEFFDF;
-  border: 1px solid #6CE1AB;
-}
-.status-card--error {
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-}
-.status-icon--success { color: #2EC483; }
-.status-icon--error { color: #dc2626; }
-
-.pill {
-  display: inline-block;
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  background: #CEFFDF;
-  border: 1px solid #6CE1AB;
-  font-size: 0.9rem;
-}
-
-/* Global flat controls: rounded corners, no shadows */
-button, input, select, textarea {
-  border-radius: 0.5rem;
-  box-shadow: none;
-}
-button:focus, input:focus, select:focus, textarea:focus {
-  outline: none;
-  box-shadow: none;
-}
-
-/* Layout containers for constrained background column */
-.app-outer {
-  min-height: 100vh;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.bg-column {
-  width: 100%;
-  max-width: 520px; /* total background width */
-  min-height: 100vh;
-  margin: 0 auto;
-  padding: 0.75rem; /* small brim on the sides */
-  box-sizing: border-box;
-}
-
-/* Page card: slightly narrower than the column (via inner margins) */
-.page-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  margin: 0.5rem; /* makes it a tad narrower than header/main */
 }

@@ -6,6 +6,24 @@ import StudentPage from "./StudentPage";
 import TeacherPage from "./TeacherPage";
 import AdminPage from "./AdminPage";
 
+const outerStyle: React.CSSProperties = {
+    minHeight: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    // UiO typografi – bruk Helvetica som basis (matches global CSS)
+    fontFamily: "Helvetica, Arial, sans-serif",
+};
+
+const cardStyle: React.CSSProperties = {
+    background: "white",
+    borderRadius: "0.75rem",
+    padding: "1.5rem",
+    boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+    width: "100%",
+    maxWidth: "960px",
+};
+
 function App() {
     const { user, loading, login, logout } = useAuth();
 
@@ -49,11 +67,9 @@ function App() {
 
     if (loading) {
         return (
-            <div className="app-outer" style={{ width: "100%" }}>
-                <div className="bg-column">
-                    <div className="page-card">
-                        <LoadingSpinner />
-                    </div>
+            <div style={outerStyle}>
+                <div style={cardStyle}>
+                    <LoadingSpinner />
                 </div>
             </div>
         );
@@ -61,85 +77,85 @@ function App() {
 
     if (!user) {
         return (
-            <div className="app-outer" style={{ width: "100%" }}>
-                <div className="bg-column front-page" style={{ background: "#CEFFDF" }}>
-                    <div className="page-card" style={{ margin: "0.75rem auto" }}>
-                        <h1 style={{ marginBottom: "1.25rem", textAlign: "center" }}>Oppmøteregistrering</h1>
+            <div className="front-page" style={{ ...outerStyle, background: "#CEFFDF", width: "100%" }}>
+                <div style={{ ...cardStyle, maxWidth: "420px" }}>
+                    <h1 style={{ marginBottom: "2rem", textAlign: "center"}}>Oppmøteregistrering</h1>
 
-                        <form onSubmit={handleSubmit}>
-                            <div style={{ marginBottom: "0.75rem" }}>
-                                <label
-                                    style={{
-                                        display: "block",
-                                        fontSize: "0.85rem",
-                                        marginBottom: "0.2rem",
-                                    }}
-                                >
-                                    Mobil / Epost
-                                </label>
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="uiobrukernavn@uio.no"
-                                    style={{
-                                        width: "100%",
-                                        padding: "0.5rem",
-                                        borderRadius: "0.5rem",
-                                        border: "1px solid #d1d5db",
-                                    }}
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: "0.75rem" }}>
-                                <label
-                                    style={{
-                                        display: "block",
-                                        fontSize: "0.85rem",
-                                        marginBottom: "0.2rem",
-                                    }}
-                                >
-                                    Passord
-                                </label>
-                                <input
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Minst 6 tegn"
-                                    style={{
-                                        width: "100%",
-                                        padding: "0.5rem",
-                                        borderRadius: "0.5rem",
-                                        border: "1px solid #d1d5db",
-                                    }}
-                                />
-                            </div>
-
-                            {authError && (
-                                <p style={{ color: "red", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-                                    {authError}
-                                </p>
-                            )}
-
-                            <button
-                                type="submit"
-                                disabled={submitting}
+                    <form onSubmit={handleSubmit}>
+                        <div style={{ marginBottom: "0.75rem" }}>
+                            <label
                                 style={{
-                                    width: "100%",
-                                    padding: "0.6rem 1rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    background: "#6CE1AB",
-                                    color: "black",
-                                    fontWeight: 500,
-                                    cursor: "pointer",
-                                    marginTop: "1.25rem",
+                                    display: "block",
+                                    fontSize: "0.85rem",
+                                    marginBottom: "0.2rem",
                                 }}
                             >
-                                {submitting ? "Logger inn..." : "Logg inn"}
-                            </button>
-                        </form>
-                    </div>
+                                Mobil / Epost
+                            </label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="uiobrukernavn@uio.no"
+                                style={{
+                                    width: "100%",
+                                    padding: "0.5rem",
+                                    borderRadius: "0.5rem",
+                                    border: "1px solid #d1d5db",
+                                }}
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: "0.75rem" }}>
+                            <label
+                                style={{
+                                    display: "block",
+                                    fontSize: "0.85rem",
+                                    marginBottom: "0.2rem",
+                                }}
+                            >
+                                Passord
+                            </label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Minst 6 tegn"
+                                style={{
+                                    width: "100%",
+                                    padding: "0.5rem",
+                                    borderRadius: "0.5rem",
+                                    border: "1px solid #d1d5db",
+                                }}
+                            />
+                        </div>
+
+                        {authError && (
+                            <p style={{ color: "red", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+                                {authError}
+                            </p>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            style={{
+                                width: "100%",
+                                padding: "0.6rem 1rem",
+                                borderRadius: "999px",
+                                border: "none",
+                                background: "#6CE1AB",
+                                color: "black",
+                                fontWeight: 500,
+                                cursor: "pointer",
+                                marginTop: "1.5rem",
+                                marginBottom: "1rem",
+                            }}
+                        >
+                            {submitting ? "Logger inn..." : "Logg inn"}
+                        </button>
+                    </form>
+
                 </div>
             </div>
         );
@@ -147,25 +163,14 @@ function App() {
 
     // Innlogget
     return (
-        <div className="app-outer" style={{ width: "100%" }}>
-            <div
-                className="bg-column"
-                style={{
-                    background:
-                        user.role === "teacher"
-                            ? "#FDCB87"
-                            : user.role === "student"
-                            ? "#CEFFDF"
-                            : "#f5f5f7",
-                }}
-            >
+        <div style={outerStyle}>
+            <div style={cardStyle}>
                 <header
                     style={{
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        paddingTop: "0.75rem",
-                        paddingBottom: "0.5rem",
+                        marginBottom: "1rem",
                     }}
                 >
                     <div>
