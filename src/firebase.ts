@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -11,6 +11,14 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+// Hoved-app (brukes av resten av appen, inkl. useAuth)
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Sekundær app kun for å opprette brukere i admin
+const secondaryApp =
+    getApps().find((a) => a.name === "secondary") ??
+    initializeApp(firebaseConfig, "secondary");
+
+export const secondaryAuth = getAuth(secondaryApp);

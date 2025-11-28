@@ -7,15 +7,16 @@ import {
     createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { db } from "../firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export type AppUser = {
     uid: string;
-    email: string | null;
-    displayName: string | null;
+    email: string;
     role: "student" | "teacher" | "admin";
-    term: number | null;
-    semesterStatus?: string;
+    term?: number | null;
+    termLabel?: string | null;
+    semesterStatus?: string | null;
+    displayName?: string | null;
 };
 
 export function useAuth() {
@@ -30,35 +31,56 @@ export function useAuth() {
                 return;
             }
 
-            const ref = doc(db, "users", fbUser.uid);
-            const snap = await getDoc(ref);
+            try {
+                const ref = doc(db, "users", fbUser.uid);
+                let snap = await getDoc(ref);
 
-            if (snap.exists()) {
+                if (!snap.exists()) {
+                    // Første gang: lag bruker i Firestore som standard student
+                    const newUser: AppUser = {
+                        uid: fbUser.uid,
+                        email: fbUser.email ?? "",
+                        displayName: fbUser.displayName ?? fbUser.email ?? "",
+                        role: "student",
+                        term: null,
+                        termLabel: null,
+                        semesterStatus: "aktiv",
+                    };
+
+                    await setDoc(ref, {
+                        ...newUser,
+                        createdAt: serverTimestamp(),
+                    });
+
+                    setUser(newUser);
+                    setLoading(false);
+                    return;
+                }
+
                 const data = snap.data() as any;
+
                 const appUser: AppUser = {
                     uid: fbUser.uid,
-                    email: fbUser.email,
-                    displayName: fbUser.displayName ?? fbUser.email,
-                    role: data.role ?? "student",
-                    term: data.term ?? null,
-                    semesterStatus: data.semesterStatus ?? "aktiv",
+                    email: data?.email ?? fbUser.email ?? "",
+                    role: (data?.role as any) ?? "student",
+                    term: data?.term ?? null,
+                    termLabel: data?.termLabel ?? null,
+                    semesterStatus: data?.semesterStatus ?? null,
+                    displayName:
+                        data?.name ??
+                        data?.displayName ??
+                        fbUser.displayName ??
+                        fbUser.email ??
+                        "",
                 };
-                setUser(appUser);
-            } else {
-                // Første gang: lag bruker i Firestore
-                const newUser: AppUser = {
-                    uid: fbUser.uid,
-                    email: fbUser.email,
-                    displayName: fbUser.email,
-                    role: "student",
-                    term: null,
-                    semesterStatus: "aktiv",
-                };
-                await setDoc(ref, newUser);
-                setUser(newUser);
-            }
 
-            setLoading(false);
+                setUser(appUser);
+            } catch (err) {
+                console.error("Feil ved henting/oppretting av bruker:", err);
+                setUser(null);
+            } finally {
+                setLoading(false);
+            }
         });
 
         return () => unsub();
@@ -70,7 +92,7 @@ export function useAuth() {
 
     const register = async (email: string, password: string) => {
         await createUserWithEmailAndPassword(auth, email, password);
-        // onAuthStateChanged vil fyre etterpå og lage Firestore-bruker
+        // onAuthStateChanged lager Firestore-bruker første gang
     };
 
     const logout = async () => {

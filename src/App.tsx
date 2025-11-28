@@ -1,3 +1,4 @@
+import LoadingSpinner from "./LoadingSpinner";
 import type React from "react";
 import { useState } from "react";
 import { useAuth } from "./hooks/useAuth";
@@ -10,7 +11,6 @@ const outerStyle: React.CSSProperties = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "#f3f4f6",
     fontFamily:
         "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
 };
@@ -25,11 +25,11 @@ const cardStyle: React.CSSProperties = {
 };
 
 function App() {
-    const { user, loading, login, register, logout } = useAuth();
+    const { user, loading, login, logout } = useAuth();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [isRegisterMode, setIsRegisterMode] = useState(false);
+    // Registrering er deaktivert – kun innlogging
     const [authError, setAuthError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
@@ -44,17 +44,14 @@ function App() {
 
         setSubmitting(true);
         try {
-            if (isRegisterMode) {
-                await register(email.trim(), password);
-            } else {
-                await login(email.trim(), password);
-            }
+            // Kun innlogging støttes
+            await login(email.trim(), password);
             // onAuthStateChanged tar over etter dette
         } catch (err: any) {
             console.error(err);
             let msg = "Kunne ikke logge inn.";
             if (err?.code === "auth/user-not-found") {
-                msg = "Bruker finnes ikke. Prøv å registrere deg først.";
+                msg = "Bruker finnes ikke.";
             } else if (err?.code === "auth/wrong-password") {
                 msg = "Feil passord.";
             } else if (err?.code === "auth/email-already-in-use") {
@@ -72,7 +69,7 @@ function App() {
         return (
             <div style={outerStyle}>
                 <div style={cardStyle}>
-                    <p>Laster...</p>
+                    <LoadingSpinner />
                 </div>
             </div>
         );
@@ -80,9 +77,9 @@ function App() {
 
     if (!user) {
         return (
-            <div style={outerStyle}>
+            <div style={{ ...outerStyle, background: "#CEFFDF", width: "100%" }}>
                 <div style={{ ...cardStyle, maxWidth: "420px" }}>
-                    <h1 style={{ marginBottom: "0.5rem", textAlign: "center"}}>Oppmøteregistrering</h1>
+                    <h1 style={{ marginBottom: "2rem", textAlign: "center"}}>Oppmøteregistrering</h1>
 
                     <form onSubmit={handleSubmit}>
                         <div style={{ marginBottom: "0.75rem" }}>
@@ -93,13 +90,13 @@ function App() {
                                     marginBottom: "0.2rem",
                                 }}
                             >
-                                E-post
+                                Mobil / Epost
                             </label>
                             <input
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="fornavn.etternavn@uio.no"
+                                placeholder="uiobrukernavn@uio.no"
                                 style={{
                                     width: "100%",
                                     padding: "0.5rem",
@@ -147,74 +144,18 @@ function App() {
                                 padding: "0.6rem 1rem",
                                 borderRadius: "999px",
                                 border: "none",
-                                background: "#2563eb",
-                                color: "white",
+                                background: "#6CE1AB",
+                                color: "black",
                                 fontWeight: 500,
                                 cursor: "pointer",
-                                marginBottom: "0.5rem",
+                                marginTop: "1.5rem",
+                                marginBottom: "1rem",
                             }}
                         >
-                            {submitting
-                                ? isRegisterMode
-                                    ? "Registrerer..."
-                                    : "Logger inn..."
-                                : isRegisterMode
-                                    ? "Registrer bruker"
-                                    : "Logg inn"}
+                            {submitting ? "Logger inn..." : "Logg inn"}
                         </button>
                     </form>
 
-                    <div
-                        style={{
-                            marginTop: "0.5rem",
-                            fontSize: "0.85rem",
-                            textAlign: "center",
-                        }}
-                    >
-                        {isRegisterMode ? (
-                            <>
-                                Har du allerede en bruker?{" "}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsRegisterMode(false);
-                                        setAuthError(null);
-                                    }}
-                                    style={{
-                                        border: "none",
-                                        background: "transparent",
-                                        color: "#2563eb",
-                                        cursor: "pointer",
-                                        textDecoration: "underline",
-                                        padding: 0,
-                                    }}
-                                >
-                                    Logg inn
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                Ny bruker?{" "}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsRegisterMode(true);
-                                        setAuthError(null);
-                                    }}
-                                    style={{
-                                        border: "none",
-                                        background: "transparent",
-                                        color: "#2563eb",
-                                        cursor: "pointer",
-                                        textDecoration: "underline",
-                                        padding: 0,
-                                    }}
-                                >
-                                    Registrer deg
-                                </button>
-                            </>
-                        )}
-                    </div>
                 </div>
             </div>
         );
@@ -234,9 +175,6 @@ function App() {
                 >
                     <div>
                         <div>{user.displayName || user.email}</div>
-                        <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                            Rolle: {user.role}
-                        </div>
                     </div>
                     <button
                         onClick={logout}

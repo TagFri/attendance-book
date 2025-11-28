@@ -1,1030 +1,2703 @@
-import { useEffect, useMemo, useState } from "react";
-import type { AppUser } from "./hooks/useAuth";
-import { db } from "./firebase";
+import React, { useEffect, useMemo, useState } from "react";
+import { useAuth } from "./hooks/useAuth";
+import { auth, db, secondaryAuth } from "./firebase";
+import { signOut } from "firebase/auth";
 import {
     collection,
     getDocs,
-    updateDoc,
     addDoc,
+    setDoc,
+    updateDoc,
+    deleteDoc,
     doc,
+    writeBatch,
     query,
     where,
-    deleteDoc,
 } from "firebase/firestore";
-import TeacherPage from "./TeacherPage";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { TERM_OPTIONS, termLabel, termShortLabel } from "./termConfig";
 
-/* ---------- Typer ---------- */
-
-type AdminPageProps = {
-    user: AppUser;
-};
-
-type UserRow = AppUser & { docId: string };
-
-type Category = {
-    id: string;
-    name: string;
-};
-
-type Activity = {
-    id: string;
-    name: string;
-    categoryId: string;
-};
+// ---------- Typer ----------
 
 type Requirement = {
     id: string;
     term: number;
-    categoryId: string;
+    category: string;
     requiredCount: number;
 };
 
-/* ---------- Hovedkomponent ---------- */
+type TimeDef = {
+    id: string;
+    name: string;
+    category: string;
+    term: number;
+};
 
-function AdminPage({ user }: AdminPageProps) {
-    const [tab, setTab] = useState<"users" | "termSetup" | "teacher">("termSetup");
+type AdminUserRow = {
+    docId: string;
+    email: string;
+    displayName: string;
+    role: "student" | "teacher" | "admin";
+    term?: number | null;
+    phone?: string | null;
+    allowedTerms?: number[];
+};
 
-    return (
-        <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-            <h2 style={{ textAlign: "center", marginBottom: "1rem" }}>
-                Admin-panel
-            </h2>
-            <nav
-                style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    gap: "0.5rem",
-                    marginBottom: "1rem",
-                    flexWrap: "wrap",
-                }}
-            >
-                <TabButton active={tab === "termSetup"} onClick={() => setTab("termSetup")}>
-                    Oppsett per termin
-                </TabButton>
-                <TabButton active={tab === "users"} onClick={() => setTab("users")}>
-                    Brukere
-                </TabButton>
-                <TabButton active={tab === "teacher"} onClick={() => setTab("teacher")}>
-                    Lærer-visning
-                </TabButton>
-            </nav>
+// ---------- Hjelpere ----------
 
-            {tab === "termSetup" && <TermSetup />}
-            {tab === "users" && <UsersAdmin />}
-            {tab === "teacher" && <TeacherPage user={user} />}
-        </div>
-    );
+function leadingNumberFromName(name: string): number {
+    const match = name.match(/^\s*(\d+)/);
+    return match ? parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
 }
 
-function TabButton({
-                       active,
-                       onClick,
-                       children,
-                   }: {
-    active: boolean;
-    onClick: () => void;
-    children: React.ReactNode;
-}) {
-    return (
-        <button
-            onClick={onClick}
-            style={{
-                padding: "0.3rem 0.7rem",
-                borderRadius: "999px",
-                border: active ? "2px solid #2563eb" : "1px solid #ccc",
-                background: active ? "#eff6ff" : "#f9fafb",
-                cursor: "pointer",
-            }}
-        >
-            {children}
-        </button>
-    );
+function generateTempPassword(): string {
+    const chars =
+        "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$";
+    let pwd = "";
+    for (let i = 0; i < 12; i++) {
+        pwd += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return pwd;
 }
 
-/* ---------- Oppsett per termin: grupper + timer + krav ---------- */
+// ---------- Brukeradministrasjon ----------
 
-function TermSetup() {
-    const [selectedTerm, setSelectedTerm] = useState<number>(11);
-    const [times, setTimes] = useState<TimeDoc[]>([]);
-    const [requirements, setRequirements] = useState<RequirementDoc[]>([]);
+const UsersAdmin: React.FC = () => {
+    const [allUsers, setAllUsers] = useState<AdminUserRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState("");
+    const [activeTab, setActiveTab] = useState<"teachers" | "students" | "admins">(
+        "teachers"
+    );
 
-    const [newReqCategory, setNewReqCategory] = useState("");
-    // En input per kategori for å legge til timer
-    const [newTimeNames, setNewTimeNames] = useState<Record<string, string>>({});
+    // Lærere: filter + sort
+    const [teacherTermFilter, setTeacherTermFilter] = useState<number | "all">(
+        "all"
+    );
+    const [teacherSortKey, setTeacherSortKey] = useState<
+        "name" | "email" | "phone"
+    >("name");
+    const [teacherSortDir, setTeacherSortDir] = useState<"asc" | "desc">("asc");
 
-    const termOptions = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    // Studenter: filter + sort
+    const [studentTermFilter, setStudentTermFilter] = useState<number | "all">(
+        "all"
+    );
+    const [studentSortKey, setStudentSortKey] = useState<
+        "name" | "email" | "phone"
+    >("name");
+    const [studentSortDir, setStudentSortDir] = useState<"asc" | "desc">("asc");
+
+    // Admins: sort
+    const [adminSortKey, setAdminSortKey] = useState<
+        "name" | "email" | "phone"
+    >("name");
+    const [adminSortDir, setAdminSortDir] = useState<"asc" | "desc">("asc");
+
+    // Modal for lærere (create/edit)
+    const [teacherModalMode, setTeacherModalMode] = useState<
+        "create" | "edit" | null
+    >(null);
+    const [teacherModalUser, setTeacherModalUser] = useState<AdminUserRow | null>(
+        null
+    );
+    const [editTeacherName, setEditTeacherName] = useState("");
+    const [editTeacherEmail, setEditTeacherEmail] = useState("");
+    const [editTeacherPhone, setEditTeacherPhone] = useState("");
+    const [editTeacherRole, setEditTeacherRole] = useState<
+        "student" | "teacher" | "admin"
+    >("teacher");
+    const [editTeacherAllowedTerms, setEditTeacherAllowedTerms] = useState<
+        number[]
+    >([]);
+
+    // Modal for studenter (create/edit)
+    const [studentModalMode, setStudentModalMode] = useState<
+        "create" | "edit" | null
+    >(null);
+    const [studentModalUser, setStudentModalUser] = useState<AdminUserRow | null>(
+        null
+    );
+    const [editStudentName, setEditStudentName] = useState("");
+    const [editStudentEmail, setEditStudentEmail] = useState("");
+    const [editStudentPhone, setEditStudentPhone] = useState("");
+    const [editStudentRole, setEditStudentRole] = useState<
+        "student" | "teacher" | "admin"
+    >("student");
+    const [editStudentTerm, setEditStudentTerm] = useState<number | null>(null);
+
+    // Modal for admins (create/edit)
+    const [adminModalMode, setAdminModalMode] = useState<
+        "create" | "edit" | null
+    >(null);
+    const [adminModalUser, setAdminModalUser] = useState<AdminUserRow | null>(
+        null
+    );
+    const [editAdminName, setEditAdminName] = useState("");
+    const [editAdminEmail, setEditAdminEmail] = useState("");
+    const [editAdminPhone, setEditAdminPhone] = useState("");
+    const [editAdminRole, setEditAdminRole] = useState<
+        "student" | "teacher" | "admin"
+    >("admin");
 
     useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            const [timesSnap, reqSnap] = await Promise.all([
-                getDocs(collection(db, "times")),
-                getDocs(collection(db, "requirements")),
-            ]);
+        const loadUsers = async () => {
+            try {
+                setLoading(true);
+                const snap = await getDocs(collection(db, "users"));
+                const list: AdminUserRow[] = snap.docs.map((d) => {
+                    const data = d.data() as any;
+                    return {
+                        docId: d.id,
+                        email: data.email ?? "",
+                        displayName:
+                            data.name ?? data.displayName ?? data.email ?? "(uten navn)",
+                        role: (data.role as any) ?? "student",
+                        term: data.term ?? null,
+                        phone: data.phone ?? null,
+                        allowedTerms: data.allowedTerms ?? [],
+                    };
+                });
 
-            const timesList: TimeDoc[] = timesSnap.docs.map((d) => {
-                const data = d.data() as any;
-                return {
-                    id: d.id,
-                    name: data.name,
-                    category: data.category,
-                    term: data.term,
-                };
-            });
+                // default: sorter på navn
+                list.sort((a, b) =>
+                    a.displayName.localeCompare(b.displayName, "nb-NO", {
+                        sensitivity: "base",
+                    })
+                );
 
-            const reqList: RequirementDoc[] = reqSnap.docs.map((d) => {
-                const data = d.data() as any;
-                return {
-                    id: d.id,
-                    term: data.term,
-                    category: data.category,
-                    requiredCount: data.requiredCount,
-                };
-            });
-
-            setTimes(timesList);
-            setRequirements(reqList);
-            setLoading(false);
+                setAllUsers(list);
+            } catch (err) {
+                console.error("Feil ved lasting av brukere:", err);
+                setAllUsers([]);
+            } finally {
+                setLoading(false);
+            }
         };
 
-        load();
+        void loadUsers();
     }, []);
 
-    const requirementsForTerm = requirements.filter(
-        (r) => r.term === selectedTerm
-    );
-    const timesForTerm = times.filter((t) => t.term === selectedTerm);
+    // Globalt søk: navn + epost + mobil
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return allUsers;
+        return allUsers.filter((u) => {
+            const namePart = (u.displayName ?? "").toLowerCase();
+            const emailPart = (u.email ?? "").toLowerCase();
+            const phonePart = (u.phone ?? "").toLowerCase();
+            const text = `${namePart} ${emailPart} ${phonePart}`;
+            return text.includes(q);
+        });
+    }, [allUsers, search]);
 
-    const handleChangeRequired = async (reqId: string, value: number) => {
-        if (Number.isNaN(value) || value < 0) return;
-        const ref = doc(db, "requirements", reqId);
-        await updateDoc(ref, { requiredCount: value });
-        setRequirements((prev) =>
-            prev.map((r) =>
-                r.id === reqId ? { ...r, requiredCount: value } : r
-            )
+    // Del opp på rolle
+    let teachers = filtered.filter((u) => u.role === "teacher");
+    let students = filtered.filter((u) => u.role === "student");
+    let admins = filtered.filter((u) => u.role === "admin");
+
+    // Filter lærere på termin
+    if (teacherTermFilter !== "all") {
+        const tVal = teacherTermFilter as number;
+        teachers = teachers.filter((u) =>
+            (u.allowedTerms ?? []).includes(tVal)
         );
+    }
+
+    // Filter studenter på termin
+    if (studentTermFilter !== "all") {
+        const tVal = studentTermFilter as number;
+        students = students.filter((u) => u.term === tVal);
+    }
+
+    // Sorter lærere
+    teachers.sort((a, b) => {
+        const getField = (u: AdminUserRow) => {
+            if (teacherSortKey === "name") return u.displayName ?? "";
+            if (teacherSortKey === "email") return u.email ?? "";
+            return u.phone ?? "";
+        };
+        const va = getField(a).toLowerCase();
+        const vb = getField(b).toLowerCase();
+        if (va < vb) return teacherSortDir === "asc" ? -1 : 1;
+        if (va > vb) return teacherSortDir === "asc" ? 1 : -1;
+        return 0;
+    });
+
+    // Sorter studenter
+    students.sort((a, b) => {
+        const getField = (u: AdminUserRow) => {
+            if (studentSortKey === "name") return u.displayName ?? "";
+            if (studentSortKey === "email") return u.email ?? "";
+            return u.phone ?? "";
+        };
+        const va = getField(a).toLowerCase();
+        const vb = getField(b).toLowerCase();
+        if (va < vb) return studentSortDir === "asc" ? -1 : 1;
+        if (va > vb) return studentSortDir === "asc" ? 1 : -1;
+        return 0;
+    });
+
+    // Sorter admins
+    admins.sort((a, b) => {
+        const getField = (u: AdminUserRow) => {
+            if (adminSortKey === "name") return u.displayName ?? "";
+            if (adminSortKey === "email") return u.email ?? "";
+            return u.phone ?? "";
+        };
+        const va = getField(a).toLowerCase();
+        const vb = getField(b).toLowerCase();
+        if (va < vb) return adminSortDir === "asc" ? -1 : 1;
+        if (va > vb) return adminSortDir === "asc" ? 1 : -1;
+        return 0;
+    });
+
+    // Begrens til 50
+    teachers = teachers.slice(0, 50);
+    students = students.slice(0, 50);
+    admins = admins.slice(0, 50);
+
+    const toggleTeacherSort = (key: "name" | "email" | "phone") => {
+        setTeacherSortKey((prevKey) => {
+            if (prevKey === key) {
+                setTeacherSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
+                return prevKey;
+            }
+            setTeacherSortDir("asc");
+            return key;
+        });
     };
 
-    const handleDeleteRequirement = async (reqId: string) => {
-        await deleteDoc(doc(db, "requirements", reqId));
-        setRequirements((prev) => prev.filter((r) => r.id !== reqId));
-        // Vi lar times stå igjen for historikk – de vil ikke vises lenger i admin
+    const toggleStudentSort = (key: "name" | "email" | "phone") => {
+        setStudentSortKey((prevKey) => {
+            if (prevKey === key) {
+                setStudentSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
+                return prevKey;
+            }
+            setStudentSortDir("asc");
+            return key;
+        });
     };
 
-    const handleAddRequirement = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const category = newReqCategory.trim();
-        if (!category) return;
+    const toggleAdminSort = (key: "name" | "email" | "phone") => {
+        setAdminSortKey((prevKey) => {
+            if (prevKey === key) {
+                setAdminSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
+                return prevKey;
+            }
+            setAdminSortDir("asc");
+            return key;
+        });
+    };
 
-        const exists = requirementsForTerm.find(
-            (r) => r.category.toLowerCase() === category.toLowerCase()
-        );
-        if (exists) {
-            setNewReqCategory("");
+    const updateUserField = async (
+        docId: string,
+        field:
+            | "role"
+            | "term"
+            | "phone"
+            | "allowedTerms"
+            | "email"
+            | "displayName",
+        value: any
+    ) => {
+        try {
+            const ref = doc(db, "users", docId);
+            await updateDoc(ref, { [field]: value });
+            setAllUsers((prev) =>
+                prev.map((u) => (u.docId === docId ? { ...u, [field]: value } : u))
+            );
+        } catch (err) {
+            console.error("Feil ved oppdatering av brukerfelt:", err);
+            alert("Kunne ikke oppdatere bruker.");
+        }
+    };
+
+    // ---------- LÆRERE: CREATE / EDIT (modal) ----------
+
+    const openCreateTeacherModal = () => {
+        setTeacherModalMode("create");
+        setTeacherModalUser(null);
+        setEditTeacherName("");
+        setEditTeacherEmail("");
+        setEditTeacherPhone("");
+        setEditTeacherRole("teacher");
+        setEditTeacherAllowedTerms([]);
+    };
+
+    const handleSaveCreateTeacher = async () => {
+        const email = editTeacherEmail.trim();
+        const name = editTeacherName.trim();
+        const phone = editTeacherPhone.trim();
+
+        if (!email) {
+            alert("E-post må fylles ut for å opprette lærer.");
             return;
         }
 
-        const colRef = collection(db, "requirements");
-        const docRef = await addDoc(colRef, {
-            term: selectedTerm,
-            category,
-            requiredCount: 0,
-        });
+        if (!editTeacherAllowedTerms || editTeacherAllowedTerms.length === 0) {
+            alert("Velg minst én termin læreren kan registrere for.");
+            return;
+        }
 
-        const newReq: RequirementDoc = {
-            id: docRef.id,
-            term: selectedTerm,
-            category,
-            requiredCount: 0,
-        };
-        setRequirements((prev) => [...prev, newReq]);
-        setNewReqCategory("");
-    };
+        try {
+            const tempPassword = generateTempPassword();
 
-    const handleDeleteTime = async (timeId: string) => {
-        await deleteDoc(doc(db, "times", timeId));
-        setTimes((prev) => prev.filter((t) => t.id !== timeId));
-    };
+            const cred = await createUserWithEmailAndPassword(
+                secondaryAuth,
+                email,
+                tempPassword
+            );
+            const uid = cred.user.uid;
 
-    const handleAddTimeForCategory = async (
-        e: React.FormEvent,
-        category: string
-    ) => {
-        e.preventDefault();
-        const raw = newTimeNames[category] ?? "";
-        const name = raw.trim();
-        if (!name) return;
+            const userDoc = {
+                email,
+                displayName: name || email,
+                name: name || email,
+                role: editTeacherRole,
+                term: null,
+                phone: phone || null,
+                allowedTerms: editTeacherAllowedTerms,
+            };
 
-        const colRef = collection(db, "times");
-        const docRef = await addDoc(colRef, {
-            name,
-            category,
-            term: selectedTerm,
-        });
+            await setDoc(doc(db, "users", uid), userDoc, { merge: true });
 
-        const newTime: TimeDoc = {
-            id: docRef.id,
-            name,
-            category,
-            term: selectedTerm,
-        };
-        setTimes((prev) => [...prev, newTime]);
-
-        setNewTimeNames((prev) => ({
-            ...prev,
-            [category]: "",
-        }));
-    };
-
-    if (loading) return <p>Laster oppsett...</p>;
-
-    return (
-        <div>
-            <h3>Times og krav per termin</h3>
-            <p>
-                Velg termin. Legg til kategorier (f.eks. Kirurgi, Indremedisin), sett
-                krav, og administrer timene (Ortopedi 1 osv.) under hver kategori.
-            </p>
-
-            <div style={{ marginBottom: "1rem" }}>
-                <label>Termin</label>
-                <br />
-                <select
-                    value={selectedTerm}
-                    onChange={(e) => setSelectedTerm(parseInt(e.target.value, 10))}
-                >
-                    {termOptions.map((t) => (
-                        <option key={t} value={t}>
-                            Termin {t}
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {/* Kategorier + krav + timer under hver kategori */}
-            <section style={{ marginBottom: "2rem" }}>
-                <h4>Kategorier og timer – termin {selectedTerm}</h4>
-
-                {requirementsForTerm.length === 0 ? (
-                    <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
-                        Ingen kategorier/krav satt for denne terminen ennå.
-                    </p>
-                ) : (
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "1rem",
-                        }}
-                    >
-                        {requirementsForTerm.map((req) => {
-                            const catTimes = timesForTerm
-                                .filter((t) => t.category === req.category)
-                                .sort((a, b) =>
-                                    a.name.localeCompare(b.name, "nb-NO", {
-                                        sensitivity: "base",
-                                    })
-                                );
-
-                            const inputValue = newTimeNames[req.category] ?? "";
-
-                            return (
-                                <div
-                                    key={req.id}
-                                    style={{
-                                        border: "1px solid #e5e7eb",
-                                        borderRadius: "0.75rem",
-                                        padding: "0.75rem",
-                                        background: "#f9fafb",
-                                    }}
-                                >
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            gap: "1rem",
-                                            alignItems: "center",
-                                            marginBottom: "0.5rem",
-                                        }}
-                                    >
-                                        <div>
-                                            <div style={{ fontWeight: 600 }}>
-                                                {req.category}
-                                            </div>
-                                            <div
-                                                style={{
-                                                    fontSize: "0.8rem",
-                                                    color: "#6b7280",
-                                                }}
-                                            >
-                                                Krav for termin {selectedTerm}
-                                            </div>
-                                        </div>
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "0.5rem",
-                                            }}
-                                        >
-                                            <span style={{ fontSize: "0.85rem" }}>Krav:</span>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                value={req.requiredCount}
-                                                onChange={(e) =>
-                                                    handleChangeRequired(
-                                                        req.id,
-                                                        parseInt(e.target.value, 10) || 0
-                                                    )
-                                                }
-                                                style={{ width: "4rem" }}
-                                            />
-                                            <button onClick={() => handleDeleteRequirement(req.id)}>
-                                                Slett kategori
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Timer under denne kategorien */}
-                                    <div>
-                                        <div
-                                            style={{
-                                                fontSize: "0.85rem",
-                                                marginBottom: "0.25rem",
-                                                fontWeight: 500,
-                                            }}
-                                        >
-                                            Timer i denne kategorien
-                                        </div>
-                                        {catTimes.length === 0 ? (
-                                            <p
-                                                style={{
-                                                    fontSize: "0.8rem",
-                                                    color: "#6b7280",
-                                                    margin: 0,
-                                                }}
-                                            >
-                                                Ingen timer registrert i denne kategorien ennå.
-                                            </p>
-                                        ) : (
-                                            <ul
-                                                style={{
-                                                    listStyle: "none",
-                                                    padding: 0,
-                                                    margin: 0,
-                                                    display: "flex",
-                                                    flexDirection: "column",
-                                                    gap: "0.25rem",
-                                                }}
-                                            >
-                                                {catTimes.map((t) => (
-                                                    <li
-                                                        key={t.id}
-                                                        style={{
-                                                            display: "flex",
-                                                            justifyContent: "space-between",
-                                                            alignItems: "center",
-                                                            background: "white",
-                                                            borderRadius: "0.5rem",
-                                                            padding: "0.3rem 0.5rem",
-                                                            border: "1px solid #e5e7eb",
-                                                        }}
-                                                    >
-                                                        <span>{t.name}</span>
-                                                        <button
-                                                            onClick={() => handleDeleteTime(t.id)}
-                                                            style={{ fontSize: "0.8rem" }}
-                                                        >
-                                                            Slett time
-                                                        </button>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
-
-                                        {/* Legg til time i denne kategorien */}
-                                        <form
-                                            onSubmit={(e) =>
-                                                handleAddTimeForCategory(e, req.category)
-                                            }
-                                            style={{
-                                                marginTop: "0.4rem",
-                                                display: "flex",
-                                                gap: "0.5rem",
-                                                alignItems: "center",
-                                            }}
-                                        >
-                                            <input
-                                                value={inputValue}
-                                                onChange={(e) =>
-                                                    setNewTimeNames((prev) => ({
-                                                        ...prev,
-                                                        [req.category]: e.target.value,
-                                                    }))
-                                                }
-                                                placeholder="Ny time, f.eks. Ortopedi 1"
-                                                style={{
-                                                    flex: 1,
-                                                    padding: "0.3rem 0.4rem",
-                                                    borderRadius: "0.4rem",
-                                                    border: "1px solid #d1d5db",
-                                                    fontSize: "0.85rem",
-                                                }}
-                                            />
-                                            <button type="submit" style={{ fontSize: "0.85rem" }}>
-                                                Legg til time
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {/* Legg til ny kategori */}
-                <form onSubmit={handleAddRequirement} style={{ marginTop: "0.75rem" }}>
-                    <label style={{ fontSize: "0.8rem" }}>
-                        Legg til kategori for termin {selectedTerm}
-                    </label>
-                    <br />
-                    <input
-                        value={newReqCategory}
-                        onChange={(e) => setNewReqCategory(e.target.value)}
-                        placeholder="Kirurgi, Indremedisin, Anestesi ..."
-                        style={{ marginRight: "0.5rem", width: "60%" }}
-                    />
-                    <button type="submit">Legg til kategori</button>
-                </form>
-            </section>
-        </div>
-    );
-}
-
-/* ---------- En blokk per gruppe ---------- */
-
-function CategoryBlock({
-                           category,
-                           term,
-                           requirement,
-                           onChangeRequiredCount,
-                           onClearRequirement,
-                           allActivities,
-                           reloadActivities,
-                       }: {
-    category: Category;
-    term: number;
-    requirement?: Requirement;
-    onChangeRequiredCount: (categoryId: string, count: number) => Promise<void>;
-    onClearRequirement: (categoryId: string) => Promise<void>;
-    allActivities: Activity[];
-    reloadActivities: () => Promise<void>;
-}) {
-    const [localRequired, setLocalRequired] = useState<number>(
-        requirement?.requiredCount ?? 0
-    );
-    const [newActivityName, setNewActivityName] = useState("");
-
-    // Sync når krav/termin endrer seg
-    useEffect(() => {
-        setLocalRequired(requirement?.requiredCount ?? 0);
-    }, [requirement?.requiredCount, term, category.id]);
-
-    const activitiesInCategory = useMemo(
-        () => allActivities.filter((a) => a.categoryId === category.id),
-        [allActivities, category.id]
-    );
-
-    const matchingSuggestions = useMemo(() => {
-        const q = newActivityName.trim().toLowerCase();
-        if (!q) return [];
-        return allActivities.filter((a) =>
-            a.name.toLowerCase().includes(q)
-        );
-    }, [newActivityName, allActivities]);
-
-    const handleBlurRequired = async () => {
-        await onChangeRequiredCount(category.id, localRequired);
-    };
-
-    const handleAddActivity = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const name = newActivityName.trim();
-        if (!name) return;
-
-        const existing = allActivities.find(
-            (a) => a.name.toLowerCase() === name.toLowerCase()
-        );
-
-        if (existing) {
-            if (existing.categoryId !== category.id) {
-                const ref = doc(db, "activities", existing.id);
-                await updateDoc(ref, { categoryId: category.id });
-            }
-        } else {
-            const colRef = collection(db, "activities");
-            await addDoc(colRef, {
-                name,
-                categoryId: category.id,
+            setAllUsers((prev) => {
+                const next: AdminUserRow[] = [
+                    {
+                        docId: uid,
+                        email,
+                        displayName: userDoc.displayName,
+                        role: editTeacherRole,
+                        term: null,
+                        phone: phone || null,
+                        allowedTerms: [...editTeacherAllowedTerms],
+                    },
+                    ...prev,
+                ];
+                next.sort((a, b) =>
+                    a.displayName.localeCompare(b.displayName, "nb-NO", {
+                        sensitivity: "base",
+                    })
+                );
+                return next;
             });
-        }
 
-        setNewActivityName("");
-        await reloadActivities();
+            setTeacherModalMode(null);
+            setTeacherModalUser(null);
+
+            alert(
+                `Ny lærer opprettet.\n\nE-post: ${email}\nMidlertidig passord: ${tempPassword}\n\nGi passordet til læreren og be dem bytte etter første innlogging.`
+            );
+        } catch (err: any) {
+            console.error("Feil ved oppretting av lærer:", err);
+            if (err?.code === "auth/email-already-in-use") {
+                alert(
+                    "E-posten er allerede i bruk i Auth. Bruk en annen eller koble eksisterende bruker."
+                );
+            } else {
+                alert("Kunne ikke opprette lærer. Se console for mer info.");
+            }
+        }
     };
 
-    const handleUseSuggestion = async (activity: Activity) => {
-        if (activity.categoryId !== category.id) {
-            const ref = doc(db, "activities", activity.id);
-            await updateDoc(ref, { categoryId: category.id });
-            await reloadActivities();
-        }
-        setNewActivityName("");
+    const openEditTeacherModal = (u: AdminUserRow) => {
+        setTeacherModalMode("edit");
+        setTeacherModalUser(u);
+        setEditTeacherName(u.displayName);
+        setEditTeacherEmail(u.email);
+        setEditTeacherPhone(u.phone ?? "");
+        setEditTeacherRole(u.role);
+        setEditTeacherAllowedTerms(u.allowedTerms ?? []);
     };
+
+    const handleSaveEditTeacher = async () => {
+        if (!teacherModalUser) return;
+        const docId = teacherModalUser.docId;
+
+        try {
+            const ref = doc(db, "users", docId);
+            await updateDoc(ref, {
+                displayName: editTeacherName,
+                email: editTeacherEmail,
+                phone: editTeacherPhone || null,
+                role: editTeacherRole,
+                allowedTerms: editTeacherAllowedTerms,
+            });
+
+            setAllUsers((prev) =>
+                prev.map((u) =>
+                    u.docId === docId
+                        ? {
+                            ...u,
+                            displayName: editTeacherName,
+                            email: editTeacherEmail,
+                            phone: editTeacherPhone || null,
+                            role: editTeacherRole,
+                            allowedTerms: [...editTeacherAllowedTerms],
+                        }
+                        : u
+                )
+            );
+
+            setTeacherModalMode(null);
+            setTeacherModalUser(null);
+        } catch (err) {
+            console.error("Feil ved lagring av lærer:", err);
+            alert("Kunne ikke lagre endringer for lærer.");
+        }
+    };
+
+    const closeTeacherModal = () => {
+        setTeacherModalMode(null);
+        setTeacherModalUser(null);
+    };
+
+    const toggleAllowedTermInTeacherModal = (termValue: number) => {
+        setEditTeacherAllowedTerms((prev) =>
+            prev.includes(termValue)
+                ? prev.filter((v) => v !== termValue)
+                : [...prev, termValue]
+        );
+    };
+
+    // ---------- STUDENTER: CREATE / EDIT (modal) ----------
+
+    const openCreateStudentModal = () => {
+        setStudentModalMode("create");
+        setStudentModalUser(null);
+        setEditStudentName("");
+        setEditStudentEmail("");
+        setEditStudentPhone("");
+        setEditStudentRole("student");
+        setEditStudentTerm(null);
+    };
+
+    const handleSaveCreateStudent = async () => {
+        const email = editStudentEmail.trim();
+        const name = editStudentName.trim();
+        const phone = editStudentPhone.trim();
+
+        if (!email) {
+            alert("E-post må fylles ut for å opprette student.");
+            return;
+        }
+
+        if (editStudentTerm == null) {
+            alert("Velg termin studenten tilhører.");
+            return;
+        }
+
+        try {
+            const tempPassword = generateTempPassword();
+
+            const cred = await createUserWithEmailAndPassword(
+                secondaryAuth,
+                email,
+                tempPassword
+            );
+            const uid = cred.user.uid;
+
+            const userDoc = {
+                email,
+                displayName: name || email,
+                name: name || email,
+                role: editStudentRole,
+                term: editStudentTerm,
+                phone: phone || null,
+                allowedTerms: [] as number[],
+            };
+
+            await setDoc(doc(db, "users", uid), userDoc, { merge: true });
+
+            setAllUsers((prev) => {
+                const next: AdminUserRow[] = [
+                    {
+                        docId: uid,
+                        email,
+                        displayName: userDoc.displayName,
+                        role: editStudentRole,
+                        term: editStudentTerm,
+                        phone: phone || null,
+                        allowedTerms: [],
+                    },
+                    ...prev,
+                ];
+                next.sort((a, b) =>
+                    a.displayName.localeCompare(b.displayName, "nb-NO", {
+                        sensitivity: "base",
+                    })
+                );
+                return next;
+            });
+
+            setStudentModalMode(null);
+            setStudentModalUser(null);
+
+            alert(
+                `Ny student opprettet.\n\nE-post: ${email}\nMidlertidig passord: ${tempPassword}\n\nGi passordet til studenten og be dem bytte etter første innlogging.`
+            );
+        } catch (err: any) {
+            console.error("Feil ved oppretting av student:", err);
+            if (err?.code === "auth/email-already-in-use") {
+                alert(
+                    "E-posten er allerede i bruk i Auth. Bruk en annen eller koble eksisterende bruker."
+                );
+            } else {
+                alert("Kunne ikke opprette student. Se console for mer info.");
+            }
+        }
+    };
+
+    const openEditStudentModal = (u: AdminUserRow) => {
+        setStudentModalMode("edit");
+        setStudentModalUser(u);
+        setEditStudentName(u.displayName);
+        setEditStudentEmail(u.email);
+        setEditStudentPhone(u.phone ?? "");
+        setEditStudentRole(u.role);
+        setEditStudentTerm(u.term ?? null);
+    };
+
+    const handleSaveEditStudent = async () => {
+        if (!studentModalUser) return;
+        const docId = studentModalUser.docId;
+
+        try {
+            const ref = doc(db, "users", docId);
+            await updateDoc(ref, {
+                displayName: editStudentName,
+                email: editStudentEmail,
+                phone: editStudentPhone || null,
+                role: editStudentRole,
+                term: editStudentTerm ?? null,
+            });
+
+            setAllUsers((prev) =>
+                prev.map((u) =>
+                    u.docId === docId
+                        ? {
+                            ...u,
+                            displayName: editStudentName,
+                            email: editStudentEmail,
+                            phone: editStudentPhone || null,
+                            role: editStudentRole,
+                            term: editStudentTerm ?? null,
+                        }
+                        : u
+                )
+            );
+
+            setStudentModalMode(null);
+            setStudentModalUser(null);
+        } catch (err) {
+            console.error("Feil ved lagring av student:", err);
+            alert("Kunne ikke lagre endringer for student.");
+        }
+    };
+
+    const closeStudentModal = () => {
+        setStudentModalMode(null);
+        setStudentModalUser(null);
+    };
+
+    // ---------- ADMINS: CREATE / EDIT (modal) ----------
+
+    const openCreateAdminModal = () => {
+        setAdminModalMode("create");
+        setAdminModalUser(null);
+        setEditAdminName("");
+        setEditAdminEmail("");
+        setEditAdminPhone("");
+        setEditAdminRole("admin");
+    };
+
+    const handleSaveCreateAdmin = async () => {
+        const email = editAdminEmail.trim();
+        const name = editAdminName.trim();
+        const phone = editAdminPhone.trim();
+
+        if (!email) {
+            alert("E-post må fylles ut for å opprette admin.");
+            return;
+        }
+
+        if (!phone) {
+            alert("Mobilnummer må fylles ut for å opprette admin.");
+            return;
+        }
+
+        try {
+            const tempPassword = generateTempPassword();
+
+            const cred = await createUserWithEmailAndPassword(
+                secondaryAuth,
+                email,
+                tempPassword
+            );
+            const uid = cred.user.uid;
+
+            const userDoc = {
+                email,
+                displayName: name || email,
+                name: name || email,
+                role: editAdminRole, // typisk 'admin'
+                term: null,
+                phone,               // alltid satt pga valideringen over
+                allowedTerms: [] as number[],
+            };
+
+            await setDoc(doc(db, "users", uid), userDoc, { merge: true });
+
+            setAllUsers((prev) => {
+                const next: AdminUserRow[] = [
+                    {
+                        docId: uid,
+                        email,
+                        displayName: userDoc.displayName,
+                        role: editAdminRole,
+                        term: null,
+                        phone,
+                        allowedTerms: [],
+                    },
+                    ...prev,
+                ];
+                next.sort((a, b) =>
+                    a.displayName.localeCompare(b.displayName, "nb-NO", {
+                        sensitivity: "base",
+                    })
+                );
+                return next;
+            });
+
+            setAdminModalMode(null);
+            setAdminModalUser(null);
+
+            alert(
+                `Ny admin opprettet.\n\nE-post: ${email}\nMidlertidig passord: ${tempPassword}\n\nGi passordet til admin og be dem bytte etter første innlogging.`
+            );
+        } catch (err: any) {
+            console.error("Feil ved oppretting av admin:", err);
+            if (err?.code === "auth/email-already-in-use") {
+                alert(
+                    "E-posten er allerede i bruk i Auth. Bruk en annen eller koble eksisterende bruker."
+                );
+            } else {
+                alert("Kunne ikke opprette admin. Se console for mer info.");
+            }
+        }
+    };
+
+    const openEditAdminModal = (u: AdminUserRow) => {
+        setAdminModalMode("edit");
+        setAdminModalUser(u);
+        setEditAdminName(u.displayName);
+        setEditAdminEmail(u.email);
+        setEditAdminPhone(u.phone ?? "");
+        setEditAdminRole(u.role);
+    };
+
+    const handleSaveEditAdmin = async () => {
+        if (!adminModalUser) return;
+        const docId = adminModalUser.docId;
+
+        try {
+            const ref = doc(db, "users", docId);
+            await updateDoc(ref, {
+                displayName: editAdminName,
+                email: editAdminEmail,
+                phone: editAdminPhone || null,
+                role: editAdminRole,
+            });
+
+            setAllUsers((prev) =>
+                prev.map((u) =>
+                    u.docId === docId
+                        ? {
+                            ...u,
+                            displayName: editAdminName,
+                            email: editAdminEmail,
+                            phone: editAdminPhone || null,
+                            role: editAdminRole,
+                        }
+                        : u
+                )
+            );
+
+            setAdminModalMode(null);
+            setAdminModalUser(null);
+        } catch (err) {
+            console.error("Feil ved lagring av admin:", err);
+            alert("Kunne ikke lagre endringer for admin.");
+        }
+    };
+
+    const closeAdminModal = () => {
+        setAdminModalMode(null);
+        setAdminModalUser(null);
+    };
+
+    // ---------- RENDER ----------
 
     return (
-        <div
-            style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: "0.75rem",
-                padding: "0.75rem 1rem",
-                background: "#f9fafb",
-            }}
-        >
+        <div style={{ marginBottom: "2rem" }}>
+
+            {/* Faner */}
             <div
                 style={{
                     display: "flex",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    alignItems: "center",
+                    gap: "0.5rem",
+                    marginBottom: "0.75rem",
                 }}
             >
-                <div>
-                    <strong>{category.name}</strong>
-                </div>
-                <div>
-                    <label style={{ fontSize: "0.8rem" }}>
-                        Krav (antall timer) – termin {term}
-                    </label>
-                    <br />
-                    <input
-                        type="number"
-                        min={0}
-                        value={localRequired}
-                        onChange={(e) =>
-                            setLocalRequired(parseInt(e.target.value, 10) || 0)
-                        }
-                        onBlur={handleBlurRequired}
-                        style={{ width: "5rem", marginRight: "0.5rem" }}
-                    />
-                    {requirement && (
-                        <button
-                            type="button"
-                            onClick={() => onClearRequirement(category.id)}
-                            style={{ fontSize: "0.75rem" }}
-                        >
-                            Fjern krav
-                        </button>
-                    )}
-                </div>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("teachers")}
+                    style={{
+                        flex: 1,
+                        padding: "0.35rem 0.5rem",
+                        borderRadius: "999px",
+                        border: "1px solid #d1d5db",
+                        background: activeTab === "teachers" ? "#b91c1c" : "#ffffff",
+                        color: activeTab === "teachers" ? "#ffffff" : "#111827",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                    }}
+                >
+                    Lærere
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("students")}
+                    style={{
+                        flex: 1,
+                        padding: "0.35rem 0.5rem",
+                        borderRadius: "999px",
+                        border: "1px solid #d1d5db",
+                        background: activeTab === "students" ? "#b91c1c" : "#ffffff",
+                        color: activeTab === "students" ? "#ffffff" : "#111827",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                    }}
+                >
+                    Studenter
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("admins")}
+                    style={{
+                        flex: 1,
+                        padding: "0.35rem 0.5rem",
+                        borderRadius: "999px",
+                        border: "1px solid #d1d5db",
+                        background: activeTab === "admins" ? "#b91c1c" : "#ffffff",
+                        color: activeTab === "admins" ? "#ffffff" : "#111827",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                    }}
+                >
+                    Admin
+                </button>
             </div>
+            {/* Globalt søk */}
+            <input
+                type="text"
+                placeholder="Søk på navn, e-post eller mobil..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                    width: "100%",
+                    padding: "0.4rem 0.6rem",
+                    marginBottom: "0.75rem",
+                    borderRadius: "0.5rem",
+                    border: "1px solid #d1d5db",
+                    fontSize: "0.9rem",
+                }}
+            />
 
-            <div style={{ marginTop: "0.75rem" }}>
-                <div style={{ fontWeight: 500, marginBottom: "0.25rem" }}>
-                    Timer i denne gruppen
-                </div>
-                {activitiesInCategory.length === 0 ? (
-                    <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-                        Ingen timer registrert ennå.
-                    </p>
-                ) : (
-                    <ul style={{ margin: 0, paddingLeft: "1.2rem" }}>
-                        {activitiesInCategory.map((a) => (
-                            <li key={a.id}>{a.name}</li>
-                        ))}
-                    </ul>
-                )}
-            </div>
+            {loading ? (
+                <p>Laster brukere...</p>
+            ) : (
+                <>
+                    {/* LÆRERE */}
+                    {activeTab === "teachers" && (
+                        <div style={{ marginBottom: "1.2rem" }}>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    justifyContent: "space-between",
+                                    gap: "0.5rem",
+                                    marginBottom: "0.4rem",
+                                }}
+                            >
+                                <div style={{ fontSize: "0.8rem" }}>
+                                    <label>
+                                        <select
+                                            value={teacherTermFilter === "all" ? "" : teacherTermFilter}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setTeacherTermFilter(
+                                                    val === "" ? "all" : parseInt(val, 10)
+                                                );
+                                            }}
+                                            style={{
+                                                padding: "0.2rem 0.4rem",
+                                                borderRadius: "0.5rem",
+                                                border: "1px solid #d1d5db",
+                                                fontSize: "0.8rem",
+                                            }}
+                                        >
+                                            <option value="">Alle terminer</option>
+                                            {TERM_OPTIONS.map((opt) => (
+                                                <option key={opt.value} value={opt.value}>
+                                                    {opt.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={openCreateTeacherModal}
+                                    style={{
+                                        padding: "0.3rem 0.7rem",
+                                        borderRadius: "999px",
+                                        border: "1px solid #d1d5db",
+                                        backgroundColor: "#ffffff",
+                                        fontSize: "0.8rem",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Legg til
+                                </button>
+                            </div>
 
-            <form onSubmit={handleAddActivity} style={{ marginTop: "0.75rem" }}>
-                <label style={{ fontSize: "0.8rem" }}>
-                    Legg til time i {category.name}
-                </label>
-                <br />
-                <input
-                    value={newActivityName}
-                    onChange={(e) => setNewActivityName(e.target.value)}
-                    placeholder="Ortopedi 1, Fys.med 2 ..."
-                    style={{ marginRight: "0.5rem", width: "60%" }}
-                />
-                <button type="submit">Legg til / bruk</button>
-            </form>
-
-            {newActivityName.trim() && matchingSuggestions.length > 0 && (
-                <div style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
-                    <div style={{ marginBottom: "0.25rem" }}>Forslag:</div>
-                    <ul style={{ margin: 0, paddingLeft: "1.2rem" }}>
-                        {matchingSuggestions.slice(0, 5).map((a) => (
-                            <li key={a.id}>
-                                {a.name}{" "}
-                                {a.categoryId === category.id ? (
-                                    <span style={{ color: "#16a34a" }}>
-                    (allerede i denne gruppen)
-                  </span>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleUseSuggestion(a)}
-                                        style={{ marginLeft: "0.5rem", fontSize: "0.75rem" }}
+                            <table
+                                style={{
+                                    width: "100%",
+                                    borderCollapse: "collapse",
+                                    fontSize: "0.85rem",
+                                }}
+                            >
+                                <thead>
+                                <tr>
+                                    <th
+                                        style={{
+                                            textAlign: "left",
+                                            borderBottom: "1px solid #e5e7eb",
+                                            padding: "0.25rem",
+                                            cursor: "pointer",
+                                        }}
+                                        onClick={() => toggleTeacherSort("name")}
                                     >
-                                        Flytt til {category.name}
-                                    </button>
+                                        Navn{" "}
+                                        {teacherSortKey === "name" &&
+                                            (teacherSortDir === "asc" ? "▲" : "▼")}
+                                    </th>
+                                    <th
+                                        style={{
+                                            textAlign: "left",
+                                            borderBottom: "1px solid #e5e7eb",
+                                            padding: "0.25rem",
+                                            cursor: "pointer",
+                                        }}
+                                        onClick={() => toggleTeacherSort("email")}
+                                    >
+                                        E-post{" "}
+                                        {teacherSortKey === "email" &&
+                                            (teacherSortDir === "asc" ? "▲" : "▼")}
+                                    </th>
+                                    <th
+                                        style={{
+                                            textAlign: "left",
+                                            borderBottom: "1px solid #e5e7eb",
+                                            padding: "0.25rem",
+                                            cursor: "pointer",
+                                        }}
+                                        onClick={() => toggleTeacherSort("phone")}
+                                    >
+                                        Mobil{" "}
+                                        {teacherSortKey === "phone" &&
+                                            (teacherSortDir === "asc" ? "▲" : "▼")}
+                                    </th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {teachers.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={3}
+                                            style={{
+                                                padding: "0.4rem",
+                                                fontSize: "0.85rem",
+                                                color: "#6b7280",
+                                            }}
+                                        >
+                                            Ingen lærere funnet.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    teachers.map((u) => (
+                                        <tr
+                                            key={u.docId}
+                                            onClick={() => openEditTeacherModal(u)}
+                                            style={{ cursor: "pointer" }}
+                                        >
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.displayName}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.email}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.phone ?? "—"}
+                                            </td>
+                                        </tr>
+                                    ))
                                 )}
-                            </li>
-                        ))}
-                    </ul>
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* STUDENTER */}
+                    {activeTab === "students" && (
+                        <div style={{ marginBottom: "1.2rem" }}>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    justifyContent: "space-between",
+                                    gap: "0.5rem",
+                                    marginBottom: "0.4rem",
+                                }}
+                            >
+                                <div style={{ fontSize: "0.8rem" }}>
+                                    <label>
+                                        <select
+                                            value={studentTermFilter === "all" ? "" : studentTermFilter}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setStudentTermFilter(
+                                                    val === "" ? "all" : parseInt(val, 10)
+                                                );
+                                            }}
+                                            style={{
+                                                padding: "0.2rem 0.4rem",
+                                                borderRadius: "0.5rem",
+                                                border: "1px solid #d1d5db",
+                                                fontSize: "0.8rem",
+                                            }}
+                                        >
+                                            <option value="">Alle terminer</option>
+                                            {TERM_OPTIONS.map((opt) => (
+                                                <option key={opt.value} value={opt.value}>
+                                                    {opt.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={openCreateStudentModal}
+                                    style={{
+                                        padding: "0.3rem 0.7rem",
+                                        borderRadius: "999px",
+                                        border: "1px solid #d1d5db",
+                                        backgroundColor: "#ffffff",
+                                        fontSize: "0.8rem",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Legg til
+                                </button>
+
+
+                            </div>
+
+                            {students.length === 0 ? (
+                                <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+                                    Ingen studenter funnet.
+                                </p>
+                            ) : (
+                                <table
+                                    style={{
+                                        width: "100%",
+                                        borderCollapse: "collapse",
+                                        fontSize: "0.85rem",
+                                    }}
+                                >
+                                    <thead>
+                                    <tr>
+                                        <th
+                                            style={{
+                                                textAlign: "left",
+                                                borderBottom: "1px solid #e5e7eb",
+                                                padding: "0.25rem",
+                                                cursor: "pointer",
+                                            }}
+                                            onClick={() => toggleStudentSort("name")}
+                                        >
+                                            Navn{" "}
+                                            {studentSortKey === "name" &&
+                                                (studentSortDir === "asc" ? "▲" : "▼")}
+                                        </th>
+                                        <th
+                                            style={{
+                                                textAlign: "left",
+                                                borderBottom: "1px solid #e5e7eb",
+                                                padding: "0.25rem",
+                                                cursor: "pointer",
+                                            }}
+                                            onClick={() => toggleStudentSort("email")}
+                                        >
+                                            E-post{" "}
+                                            {studentSortKey === "email" &&
+                                                (studentSortDir === "asc" ? "▲" : "▼")}
+                                        </th>
+                                        <th
+                                            style={{
+                                                textAlign: "left",
+                                                borderBottom: "1px solid #e5e7eb",
+                                                padding: "0.25rem",
+                                                cursor: "pointer",
+                                            }}
+                                            onClick={() => toggleStudentSort("phone")}
+                                        >
+                                            Mobil{" "}
+                                            {studentSortKey === "phone" &&
+                                                (studentSortDir === "asc" ? "▲" : "▼")}
+                                        </th>
+                                        <th
+                                            style={{
+                                                textAlign: "left",
+                                                borderBottom: "1px solid #e5e7eb",
+                                                padding: "0.25rem",
+                                            }}
+                                        >
+                                            Termin
+                                        </th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {students.map((u) => (
+                                        <tr
+                                            key={u.docId}
+                                            onClick={() => openEditStudentModal(u)}
+                                            style={{ cursor: "pointer" }}
+                                        >
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.displayName}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.email}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.phone ?? "—"}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.term != null && u.term !== undefined
+                                                    ? termShortLabel(u.term)
+                                                    : "Ingen"}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ADMINS */}
+                    {activeTab === "admins" && (
+                        <div style={{ marginBottom: "1.2rem" }}>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    justifyContent: "end",
+                                    gap: "0.5rem",
+                                    marginBottom: "0.4rem",
+                                }}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={openCreateAdminModal}
+                                    style={{
+                                        padding: "0.3rem 0.7rem",
+                                        borderRadius: "999px",
+                                        border: "1px solid #d1d5db",
+                                        backgroundColor: "#ffffff",
+                                        fontSize: "0.8rem",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Legg til
+                                </button>
+                            </div>
+
+                            {admins.length === 0 ? (
+                                <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+                                    Ingen administratorer funnet.
+                                </p>
+                            ) : (
+                                <table
+                                    style={{
+                                        width: "100%",
+                                        borderCollapse: "collapse",
+                                        fontSize: "0.85rem",
+                                    }}
+                                >
+                                    <thead>
+                                    <tr>
+                                        <th
+                                            style={{
+                                                textAlign: "left",
+                                                borderBottom: "1px solid #e5e7eb",
+                                                padding: "0.25rem",
+                                                cursor: "pointer",
+                                            }}
+                                            onClick={() => toggleAdminSort("name")}
+                                        >
+                                            Navn{" "}
+                                            {adminSortKey === "name" &&
+                                                (adminSortDir === "asc" ? "▲" : "▼")}
+                                        </th>
+                                        <th
+                                            style={{
+                                                textAlign: "left",
+                                                borderBottom: "1px solid #e5e7eb",
+                                                padding: "0.25rem",
+                                                cursor: "pointer",
+                                            }}
+                                            onClick={() => toggleAdminSort("email")}
+                                        >
+                                            E-post{" "}
+                                            {adminSortKey === "email" &&
+                                                (adminSortDir === "asc" ? "▲" : "▼")}
+                                        </th>
+                                        <th
+                                            style={{
+                                                textAlign: "left",
+                                                borderBottom: "1px solid #e5e7eb",
+                                                padding: "0.25rem",
+                                                cursor: "pointer",
+                                            }}
+                                            onClick={() => toggleAdminSort("phone")}
+                                        >
+                                            Mobil{" "}
+                                            {adminSortKey === "phone" &&
+                                                (adminSortDir === "asc" ? "▲" : "▼")}
+                                        </th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {admins.map((u) => (
+                                        <tr
+                                            key={u.docId}
+                                            onClick={() => openEditAdminModal(u)}
+                                            style={{ cursor: "pointer" }}
+                                        >
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.displayName}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.email}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {u.phone ?? "—"}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* LÆRER-MODAL */}
+            {teacherModalMode && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(15,23,42,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                    }}
+                >
+                    <div
+                        style={{
+                            width: "100%",
+                            maxWidth: "420px",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "1rem",
+                            padding: "1rem 1.25rem",
+                            boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                        }}
+                    >
+                        <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                            {teacherModalMode === "create" ? "Ny lærer" : "Rediger lærer"}
+                        </h3>
+                        <p
+                            style={{
+                                marginTop: 0,
+                                marginBottom: "0.9rem",
+                                fontSize: "0.8rem",
+                                color: "#6b7280",
+                            }}
+                        >
+                            {teacherModalMode === "create"
+                                ? "Opprett ny lærer, velg hvilke terminer de kan registrere for og lagre."
+                                : "Endre navn, e-post, mobil, rolle og hvilke terminer læreren kan undervise på."}
+                        </p>
+
+                        <div
+                            style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.5rem",
+                                marginBottom: "0.75rem",
+                            }}
+                        >
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Navn
+                                <input
+                                    type="text"
+                                    value={editTeacherName}
+                                    onChange={(e) => setEditTeacherName(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                E-post
+                                <input
+                                    type="email"
+                                    value={editTeacherEmail}
+                                    onChange={(e) => setEditTeacherEmail(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Mobil
+                                <input
+                                    type="tel"
+                                    value={editTeacherPhone}
+                                    onChange={(e) => setEditTeacherPhone(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Rolle
+                                <select
+                                    value={editTeacherRole}
+                                    onChange={(e) =>
+                                        setEditTeacherRole(
+                                            e.target.value as "student" | "teacher" | "admin"
+                                        )
+                                    }
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                >
+                                    <option value="teacher">Lærer</option>
+                                    <option value="student">Student</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </label>
+
+                            <div style={{ fontSize: "0.8rem" }}>
+                                <div style={{ marginBottom: "0.25rem" }}>
+                                    Termin(er) læreren kan registrere for:
+                                </div>
+                                <div
+                                    style={{
+                                        maxHeight: "150px",
+                                        overflowY: "auto",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #e5e7eb",
+                                        padding: "0.35rem 0.45rem",
+                                    }}
+                                >
+                                    {TERM_OPTIONS.map((opt) => (
+                                        <label
+                                            key={opt.value}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "0.35rem",
+                                                fontSize: "0.8rem",
+                                                padding: "0.15rem 0",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={editTeacherAllowedTerms.includes(opt.value)}
+                                                onChange={() =>
+                                                    toggleAllowedTermInTeacherModal(opt.value)
+                                                }
+                                            />
+                                            <span>{opt.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: "0.5rem",
+                                marginTop: "0.5rem",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={closeTeacherModal}
+                                style={{
+                                    padding: "0.3rem 0.7rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    backgroundColor: "#ffffff",
+                                    fontSize: "0.85rem",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={
+                                    teacherModalMode === "create"
+                                        ? handleSaveCreateTeacher
+                                        : handleSaveEditTeacher
+                                }
+                                style={{
+                                    padding: "0.3rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    backgroundColor: "#16a34a",
+                                    color: "#ffffff",
+                                    fontSize: "0.85rem",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                {teacherModalMode === "create" ? "Opprett lærer" : "Lagre"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* STUDENT-MODAL */}
+            {studentModalMode && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(15,23,42,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                    }}
+                >
+                    <div
+                        style={{
+                            width: "100%",
+                            maxWidth: "420px",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "1rem",
+                            padding: "1rem 1.25rem",
+                            boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                        }}
+                    >
+                        <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                            {studentModalMode === "create" ? "Ny student" : "Rediger student"}
+                        </h3>
+                        <p
+                            style={{
+                                marginTop: 0,
+                                marginBottom: "0.9rem",
+                                fontSize: "0.8rem",
+                                color: "#6b7280",
+                            }}
+                        >
+                            {studentModalMode === "create"
+                                ? "Opprett ny student og velg termin."
+                                : "Endre navn, e-post, mobil, rolle og termin."}
+                        </p>
+
+                        <div
+                            style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.5rem",
+                                marginBottom: "0.75rem",
+                            }}
+                        >
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Navn
+                                <input
+                                    type="text"
+                                    value={editStudentName}
+                                    onChange={(e) => setEditStudentName(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                E-post
+                                <input
+                                    type="email"
+                                    value={editStudentEmail}
+                                    onChange={(e) => setEditStudentEmail(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Mobil
+                                <input
+                                    type="tel"
+                                    value={editStudentPhone}
+                                    onChange={(e) => setEditStudentPhone(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Rolle
+                                <select
+                                    value={editStudentRole}
+                                    onChange={(e) =>
+                                        setEditStudentRole(
+                                            e.target.value as "student" | "teacher" | "admin"
+                                        )
+                                    }
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                >
+                                    <option value="student">Student</option>
+                                    <option value="teacher">Lærer</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Termin
+                                <select
+                                    value={editStudentTerm ?? ""}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditStudentTerm(val === "" ? null : parseInt(val, 10));
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                >
+                                    <option value="">Ingen</option>
+                                    {TERM_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        </div>
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: "0.5rem",
+                                marginTop: "0.5rem",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={closeStudentModal}
+                                style={{
+                                    padding: "0.3rem 0.7rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    backgroundColor: "#ffffff",
+                                    fontSize: "0.85rem",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={
+                                    studentModalMode === "create"
+                                        ? handleSaveCreateStudent
+                                        : handleSaveEditStudent
+                                }
+                                style={{
+                                    padding: "0.3rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    backgroundColor: "#16a34a",
+                                    color: "#ffffff",
+                                    fontSize: "0.85rem",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                {studentModalMode === "create" ? "Opprett student" : "Lagre"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ADMIN-MODAL */}
+            {adminModalMode && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(15,23,42,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                    }}
+                >
+                    <div
+                        style={{
+                            width: "100%",
+                            maxWidth: "420px",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "1rem",
+                            padding: "1rem 1.25rem",
+                            boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                        }}
+                    >
+                        <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                            {adminModalMode === "create" ? "Ny admin" : "Rediger admin"}
+                        </h3>
+                        <p
+                            style={{
+                                marginTop: 0,
+                                marginBottom: "0.9rem",
+                                fontSize: "0.8rem",
+                                color: "#6b7280",
+                            }}
+                        >
+                            {adminModalMode === "create"
+                                ? "Opprett ny admin."
+                                : "Endre navn, e-post, mobil og rolle."}
+                        </p>
+
+                        <div
+                            style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.5rem",
+                                marginBottom: "0.75rem",
+                            }}
+                        >
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Navn
+                                <input
+                                    type="text"
+                                    value={editAdminName}
+                                    onChange={(e) => setEditAdminName(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                E-post
+                                <input
+                                    type="email"
+                                    value={editAdminEmail}
+                                    onChange={(e) => setEditAdminEmail(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Mobil
+                                <input
+                                    type="tel"
+                                    value={editAdminPhone}
+                                    onChange={(e) => setEditAdminPhone(e.target.value)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                />
+                            </label>
+
+                            <label style={{ fontSize: "0.8rem" }}>
+                                Rolle
+                                <select
+                                    value={editAdminRole}
+                                    onChange={(e) =>
+                                        setEditAdminRole(
+                                            e.target.value as "student" | "teacher" | "admin"
+                                        )
+                                    }
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.3rem 0.45rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        fontSize: "0.85rem",
+                                        marginTop: "0.15rem",
+                                    }}
+                                >
+                                    <option value="admin">Admin</option>
+                                    <option value="teacher">Lærer</option>
+                                    <option value="student">Student</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: "0.5rem",
+                                marginTop: "0.5rem",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={closeAdminModal}
+                                style={{
+                                    padding: "0.3rem 0.7rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    backgroundColor: "#ffffff",
+                                    fontSize: "0.85rem",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={
+                                    adminModalMode === "create"
+                                        ? handleSaveCreateAdmin
+                                        : handleSaveEditAdmin
+                                }
+                                style={{
+                                    padding: "0.3rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    backgroundColor: "#16a34a",
+                                    color: "#ffffff",
+                                    fontSize: "0.85rem",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                {adminModalMode === "create" ? "Opprett admin" : "Lagre"}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
     );
-}
+};
+// ---------- Termin-oppsett ----------
 
-/* ---------- Bruker-admin ---------- */
-
-function UsersAdmin() {
-    const [users, setUsers] = useState<UserRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
-
-    const loadUsers = async () => {
-        setLoading(true);
-        const snap = await getDocs(collection(db, "users"));
-        const list: UserRow[] = snap.docs.map((d) => {
-            const data = d.data() as AppUser;
-            return {
-                ...data,
-                docId: d.id,
-            };
-        });
-        setUsers(list);
-        setLoading(false);
+const TermSetup: React.FC = () => {
+    type Requirement = {
+        id: string;
+        category: string;
+        requiredCount: number;
+        term: number;
     };
+
+    const [requirements, setRequirements] = useState<Requirement[]>([]);
+    const [selectedTerm, setSelectedTerm] = useState<number | "">("");
+
+    const [times, setTimes] = useState<TimeDef[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [newCategoryName, setNewCategoryName] = useState("");
+    const [newTimeNameByReq, setNewTimeNameByReq] = useState<Record<string, string>>({});
+    const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
+    const [editingTimeName, setEditingTimeName] = useState<string>("");
+    const [editingCategory, setEditingCategory] = useState("");
+    const [editingReqId, setEditingReqId] = useState<string | null>(null);
+    const [editingRequiredCount, setEditingRequiredCount] = useState<number>(0);
 
     useEffect(() => {
-        loadUsers();
+        const loadAll = async () => {
+            try {
+                setLoading(true);
+                const [reqSnap, timesSnap] = await Promise.all([
+                    getDocs(collection(db, "requirements")),
+                    getDocs(collection(db, "times")),
+                ]);
+
+                const reqs: Requirement[] = reqSnap.docs.map((d) => {
+                    const data = d.data() as any;
+                    return {
+                        id: d.id,
+                        term: data.term,
+                        category: data.category,
+                        requiredCount: data.requiredCount ?? 0,
+                    };
+                });
+
+                const ts: TimeDef[] = timesSnap.docs.map((d) => {
+                    const data = d.data() as any;
+                    return {
+                        id: d.id,
+                        name: data.name,
+                        category: data.category,
+                        term: data.term,
+                    };
+                });
+
+                setRequirements(reqs);
+                setTimes(ts);
+            } catch (err) {
+                console.error("Feil ved lasting av termin-oppsett:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        void loadAll();
     }, []);
 
-    const updateUserField = async (
-        docId: string,
-        field: keyof AppUser,
-        value: any
-    ) => {
-        const ref = doc(db, "users", docId);
-        await updateDoc(ref, { [field]: value });
-        setUsers((prev) =>
-            prev.map((u) => (u.docId === docId ? { ...u, [field]: value } : u))
+    const requirementsForTerm = requirements
+        .filter((r) => r.term === selectedTerm)
+        .sort((a, b) =>
+            a.category.localeCompare(b.category, "nb-NO", { sensitivity: "base" })
         );
+
+    const handleRenameTime = async (time: TimeDef) => {
+        const newName = editingTimeName.trim();
+        if (!newName || newName === time.name) {
+            // Ingenting å oppdatere
+            setEditingTimeId(null);
+            setEditingTimeName("");
+            return;
+        }
+
+        try {
+            await updateDoc(doc(db, "times", time.id), { name: newName });
+            setTimes((prev) =>
+                prev.map((t) => (t.id === time.id ? { ...t, name: newName } : t))
+            );
+            setEditingTimeId(null);
+            setEditingTimeName("");
+        } catch (err) {
+            console.error("Feil ved endring av timenavn:", err);
+            alert("Kunne ikke oppdatere navn på timen.");
+        }
     };
 
-    const matchesSearch = (u: UserRow) => {
-        if (!search.trim()) return true;
-        const q = search.trim().toLowerCase();
-        const name = (u.displayName || "").toLowerCase();
-        const email = (u.email || "").toLowerCase();
-        return name.includes(q) || email.includes(q);
+    const timesForTerm = times.filter((t) => t.term === selectedTerm);
+
+    const startEditRequirement = (req: RequirementDoc) => {
+        setEditingReqId(req.id);
+        setEditingCategory(req.category);
+        setEditingRequiredCount(req.requiredCount ?? 0);
     };
 
-    const limit10 = (list: UserRow[]) => list.slice(0, 10);
+    const cancelEditRequirement = () => {
+        setEditingReqId(null);
+    };
 
-    const teachers = limit10(
-        users.filter((u) => u.role === "teacher" && matchesSearch(u))
-    );
-    const students = limit10(
-        users.filter((u) => u.role === "student" && matchesSearch(u))
-    );
-    const admins = limit10(
-        users.filter((u) => u.role === "admin" && matchesSearch(u))
-    );
+    const handleSaveRequirement = async (req: RequirementDoc) => {
+        if (!editingReqId) return;
 
-    if (loading) return <p>Laster brukere...</p>;
+        const oldCategory = req.category;
+        const newName = (editingCategory || "").trim() || oldCategory;
+
+        // Finn totalt antall timer i denne gruppen (for denne terminen)
+        const totalInGroup = times.filter(
+            (t) => t.term === req.term && t.category === oldCategory
+        ).length;
+
+        let newRequired = editingRequiredCount;
+        if (Number.isNaN(newRequired) || newRequired < 0) newRequired = 0;
+        if (totalInGroup > 0 && newRequired > totalInGroup) {
+            newRequired = totalInGroup;
+        }
+
+        // Sjekk om kategori-navn allerede finnes denne terminen
+        const exists = requirementsForTerm.find(
+            (r) =>
+                r.id !== req.id &&
+                r.category.toLowerCase() === newName.toLowerCase()
+        );
+        if (exists) {
+            alert("Det finnes allerede en gruppe med dette navnet i valgt termin.");
+            return;
+        }
+
+        try {
+            const batch = writeBatch(db);
+
+            // Oppdater requirement (navn + krav)
+            const reqRef = doc(db, "requirements", req.id);
+            batch.update(reqRef, {
+                category: newName,
+                requiredCount: newRequired,
+            });
+
+            // Oppdater alle times i denne gruppen/termin
+            const timesQ = query(
+                collection(db, "times"),
+                where("term", "==", req.term),
+                where("category", "==", oldCategory)
+            );
+            const timesSnap = await getDocs(timesQ);
+            timesSnap.forEach((d) => {
+                batch.update(d.ref, { category: newName });
+            });
+
+            // Oppdater alle sessions i denne gruppen/termin
+            const sessionsQ = query(
+                collection(db, "sessions"),
+                where("term", "==", req.term),
+                where("category", "==", oldCategory)
+            );
+            const sessionsSnap = await getDocs(sessionsQ);
+            sessionsSnap.forEach((d) => {
+                batch.update(d.ref, { category: newName });
+            });
+
+            await batch.commit();
+
+            // Oppdater lokal state
+            setRequirements((prev) =>
+                prev.map((r) =>
+                    r.id === req.id
+                        ? { ...r, category: newName, requiredCount: newRequired }
+                        : r
+                )
+            );
+
+            setTimes((prev) =>
+                prev.map((t) =>
+                    t.term === req.term && t.category === oldCategory
+                        ? { ...t, category: newName }
+                        : t
+                )
+            );
+
+            setEditingReqId(null);
+        } catch (err) {
+            console.error("Feil ved lagring av gruppe:", err);
+            alert("Kunne ikke lagre endringene for gruppen.");
+        }
+    };
+
+    const handleAddCategory = async () => {
+        const name = newCategoryName.trim();
+        if (!name) return;
+
+        const exists = requirementsForTerm.some(
+            (r) => r.category.toLowerCase() === name.toLowerCase()
+        );
+        if (exists) {
+            alert("Denne gruppen finnes allerede for valgt termin.");
+            return;
+        }
+
+        try {
+            const ref = await addDoc(collection(db, "requirements"), {
+                term: selectedTerm,
+                category: name,
+                requiredCount: 0,
+            });
+            setRequirements((prev) => [
+                ...prev,
+                {
+                    id: ref.id,
+                    term: selectedTerm,
+                    category: name,
+                    requiredCount: 0,
+                },
+            ]);
+            setNewCategoryName("");
+        } catch (err) {
+            console.error("Feil ved oppretting av kategori:", err);
+            alert("Kunne ikke opprette kategori.");
+        }
+    };
+
+    const handleUpdateRequiredCount = async (req: Requirement, value: number) => {
+        try {
+            await updateDoc(doc(db, "requirements", req.id), {
+                requiredCount: value,
+            });
+            setRequirements((prev) =>
+                prev.map((r) =>
+                    r.id === req.id ? { ...r, requiredCount: value } : r
+                )
+            );
+        } catch (err) {
+            console.error("Feil ved oppdatering av krav:", err);
+            alert("Kunne ikke oppdatere krav.");
+        }
+    };
+
+    const handleDeleteCategory = async (id: string) => {
+        if (!window.confirm("Er du sikker på at du vil slette denne gruppen for terminen?")) {
+            return;
+        }
+
+        try {
+            await deleteDoc(doc(db, "requirements", id));
+            setRequirements((prev) => prev.filter((r) => r.id !== id));
+        } catch (err) {
+            console.error("Feil ved sletting av krav:", err);
+            alert("Kunne ikke slette gruppen.");
+        }
+    };
+
+    const handleAddTime = async (req: Requirement) => {
+        const key = req.id;
+        const name = (newTimeNameByReq[key] ?? "").trim();
+        if (!name) return;
+
+        try {
+            const ref = await addDoc(collection(db, "times"), {
+                term: selectedTerm,
+                category: req.category,
+                name,
+            });
+            setTimes((prev) => [
+                ...prev,
+                {
+                    id: ref.id,
+                    term: selectedTerm,
+                    category: req.category,
+                    name,
+                },
+            ]);
+            setNewTimeNameByReq((prev) => ({ ...prev, [key]: "" }));
+        } catch (err) {
+            console.error("Feil ved oppretting av time:", err);
+            alert("Kunne ikke opprette time.");
+        }
+    };
+
+    const handleDeleteTime = async (time: TimeDef) => {
+        const sure = window.confirm(
+            `Slette timen "${time.name}" fra ${termLabel(time.term)}? Historiske sesjoner beholdes, men timen forsvinner fra admin-oppsettet.`
+        );
+        if (!sure) return;
+
+        try {
+            await deleteDoc(doc(db, "times", time.id));
+            setTimes((prev) => prev.filter((t) => t.id !== time.id));
+        } catch (err) {
+            console.error("Feil ved sletting av time:", err);
+            alert("Kunne ikke slette time.");
+        }
+    };
+
+    if (loading) {
+        return <p>Laster termin-oppsett...</p>;
+    }
 
     return (
-        <div>
-            <h3>Brukere</h3>
-            <p>
-                Sett roller (<code>student</code>, <code>teacher</code>,{" "}
-                <code>admin</code>). Bare studenter har termin og status for semester.
-            </p>
-
-            <div style={{ marginBottom: "1rem" }}>
-                <label>Søk på navn eller e-post</label>
-                <br />
+        <section style={{ marginBottom: "2rem" }}>
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    marginBottom: "0.75rem",
+                }}
+            >
+                <select
+                    value={selectedTerm}
+                    onChange={(e) => {
+                        const v = e.target.value;
+                        setSelectedTerm(v === "" ? "" : parseInt(v, 10));
+                    }}
+                    style={{
+                        padding: "0.25rem 0.5rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #d1d5db",
+                    }}
+                >
+                    <option value="" disabled>
+                        Velg termin
+                    </option>
+                    {TERM_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
                 <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Søk..."
-                    style={{ maxWidth: "300px" }}
+                    type="text"
+                    placeholder="Ny gruppe..."
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    style={{
+                        flex: 1,
+                        padding: "0.35rem 0.5rem",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #d1d5db",
+                    }}
                 />
-                <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                    Viser maks 10 treff per seksjon.
-                </div>
+                <button
+                    type="button"
+                    onClick={handleAddCategory}
+                    style={{
+                        padding: "0.35rem 0.9rem",
+                        borderRadius: "999px",
+                        border: "none",
+                        backgroundColor: "#dc2626",
+                        color: "#ffffff",
+                        fontSize: "0.9rem",
+                        cursor: "pointer",
+                    }}
+                >
+                    Legg til gruppe
+                </button>
             </div>
 
-            {/* STUDENTER */}
-            <section style={{ marginBottom: "1.5rem" }}>
-                <h4>Studenter</h4>
-                {students.length === 0 ? (
-                    <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-                        Ingen studenter (eller ingen som matcher søket).
-                    </p>
-                ) : (
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead>
-                        <tr>
-                            <th
+            {requirementsForTerm.length === 0 ? (
+                <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+                    Ingen grupper definert ennå for {termLabel(selectedTerm)}.
+                </p>
+            ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    {requirementsForTerm.map((req) => {
+                        const key = req.id;
+                        const catTimes = timesForTerm
+                            .filter((t) => t.category === req.category)
+                            .sort((a, b) => {
+                                const na = leadingNumberFromName(a.name);
+                                const nb = leadingNumberFromName(b.name);
+                                if (na !== nb) return na - nb;
+                                return a.name.localeCompare(b.name, "nb-NO", {
+                                    sensitivity: "base",
+                                });
+                            });
+                        const newTimeName = newTimeNameByReq[key] ?? "";
+                        const totalInGroup = timesForTerm.filter(
+                            (t) => t.category === req.category
+                        ).length;
+                        const isEditingReq = editingReqId === req.id;
+
+                        return (
+                            <div
+                                key={req.id}
                                 style={{
-                                    borderBottom: "1px solid #ddd",
-                                    textAlign: "left",
-                                    padding: "0.3rem",
+                                    borderRadius: "0.75rem",
+                                    border: "1px solid #e5e7eb",
+                                    padding: "0.75rem 0.75rem",
+                                    backgroundColor: "#f9fafb",
                                 }}
                             >
-                                Navn / e-post
-                            </th>
-                            <th
-                                style={{
-                                    borderBottom: "1px solid #ddd",
-                                    textAlign: "left",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Rolle
-                            </th>
-                            <th
-                                style={{
-                                    borderBottom: "1px solid #ddd",
-                                    textAlign: "left",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Termin
-                            </th>
-                            <th
-                                style={{
-                                    borderBottom: "1px solid #ddd",
-                                    textAlign: "left",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Status semester
-                            </th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {students.map((u) => (
-                            <tr key={u.docId}>
-                                <td
+                                <div
                                     style={{
-                                        padding: "0.3rem",
-                                        borderBottom: "1px solid #f3f4f6",
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        marginBottom: "0.5rem",
+                                        gap: "0.5rem",
+                                        flexWrap: "wrap",
                                     }}
                                 >
-                                    <div>{u.displayName || u.email}</div>
+                                    {/* VENSTRESIDE: navn + krav */}
                                     <div
-                                        style={{ fontSize: "0.75rem", color: "#6b7280" }}
-                                    >
-                                        {u.email}
-                                    </div>
-                                </td>
-                                <td
-                                    style={{
-                                        padding: "0.3rem",
-                                        borderBottom: "1px solid #f3f4f6",
-                                    }}
-                                >
-                                    <select
-                                        value={u.role}
-                                        onChange={(e) =>
-                                            updateUserField(
-                                                u.docId,
-                                                "role",
-                                                e.target.value as AppUser["role"]
-                                            )
-                                        }
-                                    >
-                                        <option value="student">student</option>
-                                        <option value="teacher">teacher</option>
-                                        <option value="admin">admin</option>
-                                    </select>
-                                </td>
-                                <td
-                                    style={{
-                                        padding: "0.3rem",
-                                        borderBottom: "1px solid #f3f4f6",
-                                    }}
-                                >
-                                    <select
-                                        value={u.term ?? ""}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            updateUserField(
-                                                u.docId,
-                                                "term",
-                                                val ? parseInt(val, 10) : null
-                                            );
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "0.5rem",
+                                            flexWrap: "wrap",
                                         }}
                                     >
-                                        <option value="">-</option>
-                                        {[1,2,3,4,5,6,7,8,9,10,11,12].map((t) => (
-                                            <option key={t} value={t}>
-                                                {t}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </td>
-                                <td
-                                    style={{
-                                        padding: "0.3rem",
-                                        borderBottom: "1px solid #f3f4f6",
-                                    }}
-                                >
-                                    <select
-                                        value={u.semesterStatus || "aktiv"}
-                                        onChange={(e) =>
-                                            updateUserField(
-                                                u.docId,
-                                                "semesterStatus",
-                                                e.target.value
-                                            )
-                                        }
-                                    >
-                                        <option value="aktiv">aktiv</option>
-                                        <option value="friår">friår</option>
-                                        <option value="permisjon">permisjon</option>
-                                        <option value="forskning">forskningslinje</option>
-                                        <option value="ikke_aktuell">ikke aktuell</option>
-                                    </select>
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                )}
-            </section>
+                                        {isEditingReq ? (
+                                            <>
+                                                {/* Redigerbart gruppenavn */}
+                                                <input
+                                                    type="text"
+                                                    value={editingCategory}
+                                                    onChange={(e) => setEditingCategory(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter") {
+                                                            void handleSaveRequirement(req);
+                                                        } else if (e.key === "Escape") {
+                                                            cancelEditRequirement();
+                                                        }
+                                                    }}
+                                                    autoFocus
+                                                    style={{
+                                                        minWidth: "12rem",
+                                                        padding: "0.2rem 0.35rem",
+                                                        borderRadius: "0.4rem",
+                                                        border: "1px solid #d1d5db",
+                                                        fontSize: "0.9rem",
+                                                    }}
+                                                />
 
-            {/* LÆRERE */}
-            <section style={{ marginBottom: "1.5rem" }}>
-                <h4>Lærere</h4>
-                {teachers.length === 0 ? (
-                    <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-                        Ingen lærere (eller ingen som matcher søket).
-                    </p>
-                ) : (
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead>
-                        <tr>
-                            <th
-                                style={{
-                                    borderBottom: "1px solid #ddd",
-                                    textAlign: "left",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Navn / e-post
-                            </th>
-                            <th
-                                style={{
-                                    borderBottom: "1px solid #ddd",
-                                    textAlign: "left",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Rolle
-                            </th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {teachers.map((u) => (
-                            <tr key={u.docId}>
-                                <td
-                                    style={{
-                                        padding: "0.3rem",
-                                        borderBottom: "1px solid #f3f4f6",
-                                    }}
-                                >
-                                    <div>{u.displayName || u.email}</div>
-                                    <div
-                                        style={{ fontSize: "0.75rem", color: "#6b7280" }}
-                                    >
-                                        {u.email}
+                                                {/* Redigerbart krav (0–totalInGroup) */}
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: "0.25rem",
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        max={totalInGroup}
+                                                        value={editingRequiredCount}
+                                                        onChange={(e) => {
+                                                            const val = parseInt(e.target.value, 10);
+                                                            setEditingRequiredCount(
+                                                                Number.isNaN(val) ? 0 : val
+                                                            );
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter") {
+                                                                void handleSaveRequirement(req);
+                                                            } else if (e.key === "Escape") {
+                                                                cancelEditRequirement();
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            width: "4rem",
+                                                            padding: "0.2rem 0.35rem",
+                                                            borderRadius: "0.4rem",
+                                                            border: "1px solid #d1d5db",
+                                                            fontSize: "0.9rem",
+                                                            textAlign: "center",
+                                                        }}
+                                                    />
+                                                    <span
+                                                        style={{
+                                                            fontSize: "0.8rem",
+                                                            color: "#6b7280",
+                                                        }}
+                                                    >
+                                / {totalInGroup}
+                            </span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div
+                                                style={{
+                                                    fontWeight: 600,
+                                                    fontSize: "0.95rem",
+                                                }}
+                                            >
+                                                {req.category} ({req.requiredCount}/{totalInGroup})
+                                            </div>
+                                        )}
                                     </div>
-                                </td>
-                                <td
-                                    style={{
-                                        padding: "0.3rem",
-                                        borderBottom: "1px solid #f3f4f6",
-                                    }}
-                                >
-                                    <select
-                                        value={u.role}
-                                        onChange={(e) =>
-                                            updateUserField(
-                                                u.docId,
-                                                "role",
-                                                e.target.value as AppUser["role"]
-                                            )
-                                        }
-                                    >
-                                        <option value="teacher">teacher</option>
-                                        <option value="student">student</option>
-                                        <option value="admin">admin</option>
-                                    </select>
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                )}
-            </section>
 
-            {/* ADMIN */}
-            <section style={{ marginBottom: "1.5rem" }}>
-                <h4>Administratorer</h4>
-                {admins.length === 0 ? (
-                    <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-                        Ingen administratorer (eller ingen som matcher søket).
-                    </p>
-                ) : (
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead>
-                        <tr>
-                            <th
-                                style={{
-                                    borderBottom: "1px solid #ddd",
-                                    textAlign: "left",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Navn / e-post
-                            </th>
-                            <th
-                                style={{
-                                    borderBottom: "1px solid #ddd",
-                                    textAlign: "left",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Rolle
-                            </th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {admins.map((u) => (
-                            <tr key={u.docId}>
-                                <td
-                                    style={{
-                                        padding: "0.3rem",
-                                        borderBottom: "1px solid #f3f4f6",
-                                    }}
-                                >
-                                    <div>{u.displayName || u.email}</div>
+                                    {/* HØYRESIDE: knapper */}
                                     <div
-                                        style={{ fontSize: "0.75rem", color: "#6b7280" }}
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "0.5rem",
+                                        }}
                                     >
-                                        {u.email}
+                                        {/* Endre / Lagre gruppe */}
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                isEditingReq
+                                                    ? void handleSaveRequirement(req)
+                                                    : startEditRequirement(req)
+                                            }
+                                            style={{
+                                                padding: "0.25rem 0.6rem",
+                                                borderRadius: "999px",
+                                                border: "none",
+                                                backgroundColor: "#e5e7eb",
+                                                color: "#111827",
+                                                fontSize: "0.75rem",
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            {isEditingReq ? "Lagre" : "Endre gruppe"}
+                                        </button>
+
+                                        {/* Slett gruppe */}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteCategory(req.id)}
+                                            style={{
+                                                padding: "0.25rem 0.6rem",
+                                                borderRadius: "999px",
+                                                border: "none",
+                                                backgroundColor: "#fee2e2",
+                                                color: "#991b1b",
+                                                fontSize: "0.75rem",
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            Slett gruppe
+                                        </button>
                                     </div>
-                                </td>
-                                <td
+                                </div>
+
+                                {catTimes.length > 0 ? (
+                                    <ul
+                                        style={{
+                                            listStyle: "none",
+                                            paddingLeft: 0,
+                                            margin: "0 0 0.5rem 0",
+                                            fontSize: "0.85rem",
+                                        }}
+                                    >
+                                        {catTimes.map((t) => {
+                                            const isEditing = editingTimeId === t.id;
+
+                                            return (
+                                                <li
+                                                    key={t.id}
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "space-between",
+                                                        padding: "0.15rem 0",
+                                                        borderBottom: "1px dashed #e5e7eb",
+                                                        gap: "0.5rem",
+                                                    }}
+                                                >
+                                                    <div style={{ flex: 1 }}>
+                                                        {isEditing ? (
+                                                            <input
+                                                                type="text"
+                                                                value={editingTimeName}
+                                                                onChange={(e) => setEditingTimeName(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === "Enter") {
+                                                                        void handleRenameTime(t);
+                                                                    } else if (e.key === "Escape") {
+                                                                        setEditingTimeId(null);
+                                                                        setEditingTimeName("");
+                                                                    }
+                                                                }}
+                                                                autoFocus
+                                                                style={{
+                                                                    width: "100%",
+                                                                    padding: "0.2rem 0.35rem",
+                                                                    borderRadius: "0.4rem",
+                                                                    border: "1px solid #d1d5db",
+                                                                    fontSize: "0.85rem",
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <span>{t.name}</span>
+                                                        )}
+                                                    </div>
+
+                                                    <div
+                                                        style={{
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: "0.35rem",
+                                                        }}
+                                                    >
+                                                        {/* Endre / Lagre-knapp */}
+                                                        {isEditing ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void handleRenameTime(t)}
+                                                                style={{
+                                                                    padding: "0.15rem 0.45rem",
+                                                                    borderRadius: "999px",
+                                                                    border: "none",
+                                                                    backgroundColor: "#e5e7eb",
+                                                                    color: "#111827",
+                                                                    fontSize: "0.75rem",
+                                                                    cursor: "pointer",
+                                                                }}
+                                                            >
+                                                                Lagre
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setEditingTimeId(t.id);
+                                                                    setEditingTimeName(t.name);
+                                                                }}
+                                                                style={{
+                                                                    padding: "0.15rem 0.45rem",
+                                                                    borderRadius: "999px",
+                                                                    border: "none",
+                                                                    backgroundColor: "#e5e7eb",
+                                                                    color: "#111827",
+                                                                    fontSize: "0.75rem",
+                                                                    cursor: "pointer",
+                                                                }}
+                                                            >
+                                                                Endre
+                                                            </button>
+                                                        )}
+
+                                                        {/* Slett-knapp */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteTime(t)}
+                                                            style={{
+                                                                padding: "0.15rem 0.45rem",
+                                                                borderRadius: "999px",
+                                                                border: "none",
+                                                                backgroundColor: "#fee2e2",
+                                                                color: "#b91c1c",
+                                                                fontSize: "0.75rem",
+                                                                cursor: "pointer",
+                                                            }}
+                                                        >
+                                                            Slett
+                                                        </button>
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                ) : (
+                                    <p
+                                        style={{
+                                            margin: "0 0 0.5rem 0",
+                                            fontSize: "0.8rem",
+                                            color: "#9ca3af",
+                                        }}
+                                    >
+                                        Ingen timer lagt til i denne gruppen.
+                                    </p>
+                                )}
+
+                                <div
                                     style={{
-                                        padding: "0.3rem",
-                                        borderBottom: "1px solid #f3f4f6",
+                                        display: "flex",
+                                        gap: "0.5rem",
+                                        marginTop: "0.25rem",
                                     }}
                                 >
-                                    <select
-                                        value={u.role}
+                                    <input
+                                        type="text"
+                                        placeholder="Ny time..."
+                                        value={newTimeName}
                                         onChange={(e) =>
-                                            updateUserField(
-                                                u.docId,
-                                                "role",
-                                                e.target.value as AppUser["role"]
-                                            )
+                                            setNewTimeNameByReq((prev) => ({
+                                                ...prev,
+                                                [key]: e.target.value,
+                                            }))
                                         }
+                                        style={{
+                                            flex: 1,
+                                            padding: "0.3rem 0.5rem",
+                                            borderRadius: "0.5rem",
+                                            border: "1px solid #d1d5db",
+                                            fontSize: "0.85rem",
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleAddTime(req)}
+                                        style={{
+                                            padding: "0.35rem 0.8rem",
+                                            borderRadius: "999px",
+                                            border: "none",
+                                            backgroundColor: "#4b5563",
+                                            color: "#ffffff",
+                                            fontSize: "0.8rem",
+                                            cursor: "pointer",
+                                        }}
                                     >
-                                        <option value="admin">admin</option>
-                                        <option value="teacher">teacher</option>
-                                        <option value="student">student</option>
-                                    </select>
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                )}
-            </section>
+                                        Legg til time
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </section>
+    );
+};
+
+
+// ---------- Hoved AdminPage med gamle knappe-struktur ----------
+
+const AdminPage: React.FC = () => {
+    const { user, loading } = useAuth();
+    const [mainTab, setMainTab] = useState<"setup" | "users" | "teacherView">(
+        "setup"
+    );
+
+    if (loading) {
+        return (
+            <div
+                style={{
+                    minHeight: "100vh",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#f5f5f7",
+                }}
+            >
+                <div
+                    style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "999px",
+                        border: "3px solid #e5e7eb",
+                        borderTopColor: "#dc2626",
+                        animation: "spin 1s linear infinite",
+                    }}
+                />
+            </div>
+        );
+    }
+
+    if (!user || user.role !== "admin") {
+        return (
+            <div
+                style={{
+                    minHeight: "100vh",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#f5f5f7",
+                    padding: "1.5rem",
+                }}
+            >
+                <div className="page-card page-card--admin">
+                    <h2>Ingen tilgang</h2>
+                    <p>Du må være logget inn som administrator for å se denne siden.</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div
+            style={{
+                minHeight: "100vh",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "center",
+                background: "#f5f5f7",
+                padding: "1.5rem 1rem",
+            }}
+        >
+            <div className="page-card page-card--admin">
+                <header
+                    style={{
+                        marginBottom: "1rem",
+                        borderBottom: "1px solid #e5e7eb",
+                        paddingBottom: "0.75rem",
+                    }}
+                >
+                    <h2 style={{ margin: 0 }}>Adminpanel</h2>
+                    <p
+                        style={{
+                            margin: "0.25rem 0 0.75rem",
+                            fontSize: "0.85rem",
+                            color: "#6b7280",
+                        }}
+                    >
+                        Oppsett av krav per termin, administrasjon av brukere og
+                        forhåndsvisning for lærere.
+                    </p>
+
+                    {/* Øverste knapper: Oppsett / Brukere */}
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                        }}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setMainTab("setup")}
+                            style={{
+                                flex: 1,
+                                padding: "0.35rem 0.5rem",
+                                borderRadius: "999px",
+                                border: "1px solid #e5e7eb",
+                                background:
+                                    mainTab === "setup" ? "#b91c1c" : "#ffffff",
+                                color: mainTab === "setup" ? "#ffffff" : "#111827",
+                                fontSize: "0.85rem",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Oppmøtebøker
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setMainTab("users")}
+                            style={{
+                                flex: 1,
+                                padding: "0.35rem 0.5rem",
+                                borderRadius: "999px",
+                                border: "1px solid #e5e7eb",
+                                background:
+                                    mainTab === "users" ? "#b91c1c" : "#ffffff",
+                                color: mainTab === "users" ? "#ffffff" : "#111827",
+                                fontSize: "0.85rem",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Brukere
+                        </button>
+                    </div>
+                </header>
+
+                {mainTab === "setup" && <TermSetup />}
+                {mainTab === "users" && <UsersAdmin />}
+                {mainTab === "teacherView" && <TeacherPreview />}
+            </div>
         </div>
     );
-}
+};
 
 export default AdminPage;

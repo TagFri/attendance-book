@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <!-- Kalender-ramme -->
+    <rect
+            x="8"
+            y="10"
+            width="48"
+            height="42"
+            rx="8"
+            ry="8"
+            fill="#ffffff"
+            stroke="#0f172a"
+            stroke-width="3"
+    />
+
+    <!-- Kalender-topplinje -->
+    <rect
+            x="8"
+            y="10"
+            width="48"
+            height="12"
+            rx="8"
+            ry="8"
+            fill="#2563eb"
+    />
+
+    <!-- Kalender-"ringer" (enkle stiliserte hengsler) -->
+    <rect x="18" y="8" width="6" height="6" rx="2" fill="#e5f3ff" />
+    <rect x="29" y="8" width="6" height="6" rx="2" fill="#e5f3ff" />
+    <rect x="40" y="8" width="6" height="6" rx="2" fill="#e5f3ff" />
+
+    <!-- Stor grønn hake som dominerer ikonet -->
+    <path
+            d="M18 34 L28 44 L46 22"
+            fill="none"
+            stroke="#16a34a"
+            stroke-width="5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+    />
+</svg>
