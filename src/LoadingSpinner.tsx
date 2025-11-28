@@ -16,7 +16,8 @@ const LoadingSpinner: React.FC = () => {
                     height: "32px",
                     borderRadius: "50%",
                     border: "3px solid #e5e7eb",
-                    borderTopColor: "#2563eb",
+                    // Accent color per request
+                    borderTopColor: "#2EC483",
                     animation: "spin 1s linear infinite",
                 }}
             />

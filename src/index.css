@@ -1,68 +1,191 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+/* Reset from Vite template replaced with UiO typography rules */
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
+/* Base document */
+html, body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  padding: 0;
   min-width: 320px;
   min-height: 100vh;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* UiO font plan: Helvetica for body text; Times New Roman for ingress/sitat */
+body, input, textarea, select, button {
+  font-family: Helvetica, Arial, sans-serif;
+  color: #000000;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
+/* Paragraphs and links */
+p, a {
+  font-size: 18px;
+  font-weight: 400;
+  color: #000000;
+}
+
+a {
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  color: #000000;
+}
+
+/* Headings – default for "Øvrige sider" */
+h1, h2, h3, h4, h5 {
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+  color: #000000;
+}
+h1 { font-size: 50px; font-weight: 400; }
+h2 { font-size: 28px; font-weight: 400; }
+h3 { font-size: 23px; font-weight: 400; }
+h4 { font-size: 19px; font-weight: 700; }
+h5 { font-size: 17px; font-weight: 700; }
+
+/* Front page (login) overrides – "Forsider" */
+.front-page h1 { font-size: 50px; font-weight: 400; }
+.front-page h2 { font-size: 40px; font-weight: 400; }
+.front-page h3 { font-size: 31px; font-weight: 400; }
+.front-page h4 { font-size: 26px; font-weight: 400; }
+.front-page h5 { font-size: 21px; font-weight: 400; }
+.front-page p,
+.front-page a { font-size: 18px; font-weight: 400; color: #000000; }
+
+/* Ingress and quotes use Times New Roman */
+.ingress,
+blockquote {
+  font-family: "Times New Roman", Times, serif;
+}
+
+/* Utility: responsive table wrapper (used on teacher/admin pages) */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Teacher page input/select look & feel (existing styles may reference these) */
+.teacher-field {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  text-align: center;
+}
+.teacher-field:focus {
+  outline: none;
+  border-color: #2EC483;
+}
+.teacher-static {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  text-align: center;
+}
+.teacher-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0; right: 0;
+  z-index: 10;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  margin-top: 0.2rem;
+  list-style: none;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+}
+
+/* Student page styles using UiO palette */
+.student-field {
+  padding: 0.5rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+}
+.student-field:focus {
+  outline: none;
+  border-color: #2EC483;
+}
+
+.student-btn {
+  padding: 0.5rem 1.2rem;
+  border-radius: 999px;
+  border: none;
   cursor: pointer;
-  transition: border-color 0.25s;
+  font-weight: 500;
 }
-button:hover {
-  border-color: #646cff;
+.student-btn--primary {
+  background: #2EC483;
+  color: #000000;
 }
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+.student-btn--secondary {
+  background: #CEFFDF;
+  color: #000000;
+  border: 1px solid #6CE1AB;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+.status-card {
+  text-align: center;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  margin: 0 auto;
+}
+.status-card--success {
+  background: #CEFFDF;
+  border: 1px solid #6CE1AB;
+}
+.status-card--error {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+.status-icon--success { color: #2EC483; }
+.status-icon--error { color: #dc2626; }
+
+.pill {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: #CEFFDF;
+  border: 1px solid #6CE1AB;
+  font-size: 0.9rem;
+}
+
+/* Global flat controls: rounded corners, no shadows */
+button, input, select, textarea {
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+button:focus, input:focus, select:focus, textarea:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Layout containers for constrained background column */
+.app-outer {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.bg-column {
+  width: 100%;
+  max-width: 520px; /* total background width */
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 0.75rem; /* small brim on the sides */
+  box-sizing: border-box;
+}
+
+/* Page card: slightly narrower than the column (via inner margins) */
+.page-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 0.5rem; /* makes it a tad narrower than header/main */
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import LoadingSpinner from "./LoadingSpinner";
 import { useAuth } from "./hooks/useAuth";
 import { auth, db, secondaryAuth } from "./firebase";
 import { signOut } from "firebase/auth";
@@ -816,7 +817,7 @@ const UsersAdmin: React.FC = () => {
             />
 
             {loading ? (
-                <p>Laster brukere...</p>
+                <LoadingSpinner />
             ) : (
                 <>
                     {/* LÆRERE */}
@@ -2138,67 +2139,83 @@ const TermSetup: React.FC = () => {
     };
 
     if (loading) {
-        return <p>Laster termin-oppsett...</p>;
+        return <LoadingSpinner />;
     }
 
     return (
         <section style={{ marginBottom: "2rem" }}>
+            {/* Toppkontroller: Termin (øverst), deretter Ny gruppe + Legg til gruppe under (desktop og mobil) */}
             <div
                 style={{
                     display: "flex",
-                    alignItems: "center",
-                    gap: "0.75rem",
+                    flexDirection: "column",
+                    gap: "0.5rem",
                     marginBottom: "0.75rem",
                 }}
             >
-                <select
-                    value={selectedTerm}
-                    onChange={(e) => {
-                        const v = e.target.value;
-                        setSelectedTerm(v === "" ? "" : parseInt(v, 10));
-                    }}
-                    style={{
-                        padding: "0.25rem 0.5rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid #d1d5db",
-                    }}
-                >
-                    <option value="" disabled>
-                        Velg termin
-                    </option>
-                    {TERM_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                <div>
+                    <select
+                        value={selectedTerm}
+                        onChange={(e) => {
+                            const v = e.target.value;
+                            setSelectedTerm(v === "" ? "" : parseInt(v, 10));
+                        }}
+                        style={{
+                            width: "100%",
+                            padding: "0.35rem 0.5rem",
+                            borderRadius: "0.5rem",
+                            border: "1px solid #d1d5db",
+                        }}
+                    >
+                        <option value="" disabled>
+                            Velg termin
                         </option>
-                    ))}
-                </select>
-                <input
-                    type="text"
-                    placeholder="Ny gruppe..."
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
+                        {TERM_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div
                     style={{
-                        flex: 1,
-                        padding: "0.35rem 0.5rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid #d1d5db",
-                    }}
-                />
-                <button
-                    type="button"
-                    onClick={handleAddCategory}
-                    style={{
-                        padding: "0.35rem 0.9rem",
-                        borderRadius: "999px",
-                        border: "none",
-                        backgroundColor: "#dc2626",
-                        color: "#ffffff",
-                        fontSize: "0.9rem",
-                        cursor: "pointer",
+                        display: "flex",
+                        gap: "0.5rem",
+                        flexWrap: "wrap",
+                        alignItems: "center",
                     }}
                 >
-                    Legg til gruppe
-                </button>
+                    <input
+                        type="text"
+                        placeholder="Ny gruppe..."
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        style={{
+                            flex: 1,
+                            minWidth: 0,
+                            padding: "0.35rem 0.5rem",
+                            borderRadius: "0.5rem",
+                            border: "1px solid #d1d5db",
+                        }}
+                    />
+                    <button
+                        type="button"
+                        onClick={handleAddCategory}
+                        style={{
+                            padding: "0.45rem 0.9rem",
+                            borderRadius: "999px",
+                            border: "none",
+                            backgroundColor: "#dc2626",
+                            color: "#ffffff",
+                            fontSize: "0.9rem",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        Legg til gruppe
+                    </button>
+                </div>
             </div>
 
             {requirementsForTerm.length === 0 ? (
@@ -2583,16 +2600,7 @@ const AdminPage: React.FC = () => {
                     background: "#f5f5f7",
                 }}
             >
-                <div
-                    style={{
-                        width: "32px",
-                        height: "32px",
-                        borderRadius: "999px",
-                        border: "3px solid #e5e7eb",
-                        borderTopColor: "#dc2626",
-                        animation: "spin 1s linear infinite",
-                    }}
-                />
+                <LoadingSpinner />
             </div>
         );
     }
@@ -2618,84 +2626,73 @@ const AdminPage: React.FC = () => {
     }
 
     return (
-        <div
-            style={{
-                minHeight: "100vh",
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "center",
-                background: "#f5f5f7",
-                padding: "1.5rem 1rem",
-            }}
-        >
-            <div className="page-card page-card--admin">
-                <header
+        <div className="page-card page-card--admin">
+            <header
+                style={{
+                    marginBottom: "1rem",
+                    borderBottom: "1px solid #e5e7eb",
+                    paddingBottom: "0.75rem",
+                }}
+            >
+                <h2 style={{ margin: 0 }}>Adminpanel</h2>
+                <p
                     style={{
-                        marginBottom: "1rem",
-                        borderBottom: "1px solid #e5e7eb",
-                        paddingBottom: "0.75rem",
+                        margin: "0.25rem 0 0.75rem",
+                        fontSize: "0.85rem",
+                        color: "#6b7280",
                     }}
                 >
-                    <h2 style={{ margin: 0 }}>Adminpanel</h2>
-                    <p
+                    Oppsett av krav per termin, administrasjon av brukere og
+                    forhåndsvisning for lærere.
+                </p>
+
+                {/* Øverste knapper: Oppsett / Brukere */}
+                <div
+                    style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                    }}
+                >
+                    <button
+                        type="button"
+                        onClick={() => setMainTab("setup")}
                         style={{
-                            margin: "0.25rem 0 0.75rem",
+                            flex: 1,
+                            padding: "0.35rem 0.5rem",
+                            borderRadius: "999px",
+                            border: "1px solid #e5e7eb",
+                            background:
+                                mainTab === "setup" ? "#b91c1c" : "#ffffff",
+                            color: mainTab === "setup" ? "#ffffff" : "#111827",
                             fontSize: "0.85rem",
-                            color: "#6b7280",
+                            cursor: "pointer",
                         }}
                     >
-                        Oppsett av krav per termin, administrasjon av brukere og
-                        forhåndsvisning for lærere.
-                    </p>
-
-                    {/* Øverste knapper: Oppsett / Brukere */}
-                    <div
+                        Oppmøtebøker
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setMainTab("users")}
                         style={{
-                            display: "flex",
-                            gap: "0.5rem",
+                            flex: 1,
+                            padding: "0.35rem 0.5rem",
+                            borderRadius: "999px",
+                            border: "1px solid #e5e7eb",
+                            background:
+                                mainTab === "users" ? "#b91c1c" : "#ffffff",
+                            color: mainTab === "users" ? "#ffffff" : "#111827",
+                            fontSize: "0.85rem",
+                            cursor: "pointer",
                         }}
                     >
-                        <button
-                            type="button"
-                            onClick={() => setMainTab("setup")}
-                            style={{
-                                flex: 1,
-                                padding: "0.35rem 0.5rem",
-                                borderRadius: "999px",
-                                border: "1px solid #e5e7eb",
-                                background:
-                                    mainTab === "setup" ? "#b91c1c" : "#ffffff",
-                                color: mainTab === "setup" ? "#ffffff" : "#111827",
-                                fontSize: "0.85rem",
-                                cursor: "pointer",
-                            }}
-                        >
-                            Oppmøtebøker
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setMainTab("users")}
-                            style={{
-                                flex: 1,
-                                padding: "0.35rem 0.5rem",
-                                borderRadius: "999px",
-                                border: "1px solid #e5e7eb",
-                                background:
-                                    mainTab === "users" ? "#b91c1c" : "#ffffff",
-                                color: mainTab === "users" ? "#ffffff" : "#111827",
-                                fontSize: "0.85rem",
-                                cursor: "pointer",
-                            }}
-                        >
-                            Brukere
-                        </button>
-                    </div>
-                </header>
+                        Brukere
+                    </button>
+                </div>
+            </header>
 
-                {mainTab === "setup" && <TermSetup />}
-                {mainTab === "users" && <UsersAdmin />}
-                {mainTab === "teacherView" && <TeacherPreview />}
-            </div>
+            {mainTab === "setup" && <TermSetup />}
+            {mainTab === "users" && <UsersAdmin />}
+            {mainTab === "teacherView" && <TeacherPreview />}
         </div>
     );
 };

@@ -16,6 +16,7 @@ import {
     where,
 } from "firebase/firestore";
 import { QRCodeCanvas } from "qrcode.react";
+import LoadingSpinner from "./LoadingSpinner";
 import { TERM_OPTIONS, termLabel } from "./termConfig";
 
 type TeacherPageProps = {
@@ -297,11 +298,7 @@ function TeacherPage({ user }: TeacherPageProps) {
         const q = searchTerm.trim().toLowerCase();
         if (!q) return [];
         return timesForTerm
-            .filter(
-                (t) =>
-                    t.name.toLowerCase().includes(q) ||
-                    t.category.toLowerCase().includes(q)
-            )
+            .filter((t) => t.name.toLowerCase().includes(q))
             .sort((a, b) =>
                 a.name.localeCompare(b.name, "nb-NO", { sensitivity: "base" })
             );
@@ -418,7 +415,12 @@ function TeacherPage({ user }: TeacherPageProps) {
         }
     };
 
-    if (loading) return <div className="page-card page-card--teacher">Laster lærerdata...</div>;
+    if (loading)
+        return (
+            <div className="page-card page-card--teacher">
+                <LoadingSpinner />
+            </div>
+        );
 
     return (
         <div className="page-card page-card--teacher">
@@ -634,6 +636,12 @@ function TeacherPage({ user }: TeacherPageProps) {
                         >
                             Brukes dersom en student ikke kan skanne eller skrive inn kode.
                         </p>
+
+                        {studentsLoading && (
+                            <div style={{ display: "flex", justifyContent: "center" }}>
+                                <LoadingSpinner />
+                            </div>
+                        )}
 
                         <div
                             style={{

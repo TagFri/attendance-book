@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import QrScanner from "./QrScanner";
 import { termLabel } from "./termConfig";
+import LoadingSpinner from "./LoadingSpinner";
 
 
 type StudentPageProps = {
@@ -254,7 +255,7 @@ function StudentPage({ user }: StudentPageProps) {
     useEffect(() => {
         if (status === "idle") return;
 
-        const timeoutMs = status === "success" ? 3000 : 2000;
+        const timeoutMs = status === "success" ? 5000 : 5000;
         const t = setTimeout(() => {
             resetToIdle();
         }, timeoutMs);
@@ -283,105 +284,31 @@ function StudentPage({ user }: StudentPageProps) {
                 }}
             >
                 {status === "success" ? (
-                    <>
-                        <div
-                            style={{
-                                fontSize: "4rem",
-                                color: "#16a34a",
-                                marginBottom: "0.5rem",
-                            }}
-                        >
-                            ✅
-                        </div>
-                        <h3
-                            style={{
-                                margin: 0,
-                                marginBottom: "0.3rem",
-                            }}
-                        >
-                            Oppmøte registrert
-                        </h3>
+                    <div className="status-card status-card--success" style={{ maxWidth: 520 }}>
+                        <div className="status-icon--success" style={{ fontSize: "3rem", marginBottom: "0.25rem" }}>✅</div>
+                        <h3 style={{ margin: 0, marginBottom: "0.3rem" }}>Oppmøte registrert</h3>
                         {lastSessionName && (
-                            <p
-                                style={{
-                                    margin: 0,
-                                    marginBottom: "1rem",
-                                    fontSize: "1rem",
-                                    color: "#374151",
-                                }}
-                            >
+                            <p style={{ margin: 0, marginBottom: "0.75rem", fontSize: "1rem", color: "#374151" }}>
                                 {lastSessionName}
                             </p>
                         )}
-
-                        <button
-                            type="button"
-                            onClick={resetToIdle}
-                            style={{
-                                marginTop: "0.5rem",
-                                padding: "0.5rem 1.2rem",
-                                borderRadius: "999px",
-                                border: "none",
-                                background: "#2563eb",
-                                color: "white",
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                fontSize: "0.95rem",
-                            }}
-                        >
+                        <button type="button" onClick={resetToIdle} className="student-btn student-btn--primary">
                             Registrer en kode til
                         </button>
-                    </>
+                    </div>
                 ) : status === "error" ? (
-                    <>
-                        <div
-                            style={{
-                                fontSize: "4rem",
-                                color: "#dc2626",
-                                marginBottom: "0.5rem",
-                            }}
-                        >
-                            ❌
-                        </div>
-                        <h3
-                            style={{
-                                margin: 0,
-                                marginBottom: "0.3rem",
-                            }}
-                        >
-                            Kunne ikke registrere oppmøte
-                        </h3>
+                    <div className="status-card status-card--error" style={{ maxWidth: 520 }}>
+                        <div className="status-icon--error" style={{ fontSize: "3rem", marginBottom: "0.25rem" }}>❌</div>
+                        <h3 style={{ margin: 0, marginBottom: "0.3rem" }}>Kunne ikke registrere oppmøte</h3>
                         {statusMessage && (
-                            <p
-                                style={{
-                                    margin: 0,
-                                    marginBottom: "1rem",
-                                    fontSize: "0.95rem",
-                                    color: "#374151",
-                                }}
-                            >
+                            <p style={{ margin: 0, marginBottom: "0.75rem", fontSize: "0.95rem", color: "#374151" }}>
                                 {statusMessage}
                             </p>
                         )}
-
-                        <button
-                            type="button"
-                            onClick={resetToIdle}
-                            style={{
-                                marginTop: "0.5rem",
-                                padding: "0.5rem 1.2rem",
-                                borderRadius: "999px",
-                                border: "none",
-                                background: "#6b7280",
-                                color: "white",
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                fontSize: "0.95rem",
-                            }}
-                        >
-                            Prøv en kode til
+                        <button type="button" onClick={resetToIdle} className="student-btn student-btn--secondary">
+                            Prøv igjen
                         </button>
-                    </>
+                    </div>
                 ) : (
                     <>
                         <label
@@ -397,16 +324,16 @@ function StudentPage({ user }: StudentPageProps) {
                             onChange={handleCodeChange}
                             maxLength={6}
                             placeholder="482931"
+                            className="student-field"
                             style={{
-                                padding: "0.5rem 0.8rem",
                                 fontSize: "1.2rem",
                                 letterSpacing: "0.3em",
                                 textAlign: "center",
-                                borderRadius: "0.5rem",
-                                border: "1px solid #d1d5db",
                                 minWidth: "10rem",
                             }}
                         />
+
+                        {loading && <LoadingSpinner />}
                         <p
                             style={{
                                 fontSize: "0.8rem",
@@ -420,15 +347,8 @@ function StudentPage({ user }: StudentPageProps) {
                         <button
                             type="button"
                             onClick={() => setScanning((s) => !s)}
-                            style={{
-                                marginTop: "0.5rem",
-                                padding: "0.4rem 0.9rem",
-                                borderRadius: "999px",
-                                border: "1px solid #d1d5db",
-                                background: scanning ? "#e5e7eb" : "#f9fafb",
-                                cursor: "pointer",
-                                fontSize: "0.9rem",
-                            }}
+                            className="student-btn student-btn--secondary"
+                            style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}
                         >
                             {scanning ? "Stopp skanning" : "Skann QR-kode"}
                         </button>
@@ -447,7 +367,7 @@ function StudentPage({ user }: StudentPageProps) {
                                         maxWidth: "100%",
                                         borderRadius: "0.75rem",
                                         overflow: "hidden",
-                                        border: "1px solid #d1d5db",
+                                        border: "1px solid #6CE1AB",
                                     }}
                                 >
                                     <QrScanner onCode={handleQrResult} />
@@ -461,17 +381,18 @@ function StudentPage({ user }: StudentPageProps) {
             <hr style={{ marginTop: "2rem", marginBottom: "1rem" }} />
 
             <section>
-                <h3>Oppmøteoversikt {termLabel(selectedTerm).toLowerCase()}</h3>
+                <h3 style={{textAlign: "center"}}>
+                    <span className="pill">{termLabel(selectedTerm)}</span>
+                </h3>
 
                 {statsLoading ? (
-                    // Hvis du har LoadingSpinner, kan du bruke den her:
-                    // <LoadingSpinner />
-                    <p style={{ textAlign: "center" }}> </p>
+                    <LoadingSpinner />
                 ) : stats.length === 0 ? (
                     <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
                         Ingen registrerte timer for denne terminen ennå.
                     </p>
                 ) : (
+                    <div className="table-responsive">
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                         <tr>
@@ -513,7 +434,7 @@ function StudentPage({ user }: StudentPageProps) {
                             const baseCellStyle: React.CSSProperties = {
                                 padding: "0.3rem",
                                 borderBottom: "1px solid #f3f4f6",
-                                background: metRequirement ? "#dcfce7" : "transparent",
+                                background: metRequirement ? "#CEFFDF" : "transparent",
                             };
 
                             return (
@@ -531,7 +452,8 @@ function StudentPage({ user }: StudentPageProps) {
                             );
                         })}
                         </tbody>
-                    </table>
+                        </table>
+                    </div>
                 )}
             </section>
         </div>
