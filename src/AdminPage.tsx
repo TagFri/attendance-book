@@ -70,6 +70,7 @@ function generateTempPassword(): string {
 // ---------- Brukeradministrasjon ----------
 
 const UsersAdmin: React.FC = () => {
+    const { user: authUser } = useAuth();
     const [allUsers, setAllUsers] = useState<AdminUserRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -95,7 +96,8 @@ const UsersAdmin: React.FC = () => {
     >("name");
     const [studentSortDir, setStudentSortDir] = useState<"asc" | "desc">("asc");
 
-    // Admins: sort
+    // Admins: filter + sort
+    const [adminTermFilter, setAdminTermFilter] = useState<number | "all">("all");
     const [adminSortKey, setAdminSortKey] = useState<
         "name" | "email" | "phone"
     >("name");
@@ -110,6 +112,54 @@ const UsersAdmin: React.FC = () => {
             .sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value))
             .map((t) => ({ value: t.value, label: t.label || `Termin ${t.value}` }));
     }, [dbTerms]);
+
+    // Nåværende admins modultilganger (allowedTerms) og superadmin-status
+    const [currentAdminAllowedTerms, setCurrentAdminAllowedTerms] = useState<number[] | null>(null);
+    const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
+    useEffect(() => {
+        const loadMine = async () => {
+            try {
+                if (!authUser?.uid) return;
+                const meRef = doc(db, "users", authUser.uid);
+                const snap = await getDoc(meRef);
+                const data = snap.exists() ? (snap.data() as any) : null;
+                const arr = Array.isArray(data?.allowedTerms) ? data.allowedTerms : [];
+                const cleaned = (arr as any[])
+                    .map((v) => (typeof v === "number" ? v : parseInt(String(v), 10)))
+                    .filter((v) => !Number.isNaN(v));
+                setCurrentAdminAllowedTerms(cleaned);
+                setIsSuperAdmin(Boolean(data?.isSuperAdmin));
+            } catch (e) {
+                console.warn("Kunne ikke hente allowedTerms for innlogget admin:", e);
+                setCurrentAdminAllowedTerms([]);
+                setIsSuperAdmin(false);
+            }
+        };
+        void loadMine();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authUser?.uid]);
+
+    // Begrensede term-alternativer basert på innlogget admins tilganger (superadmin ser alle)
+    const allowedTermOptions = useMemo(() => {
+        if (isSuperAdmin === true) return computedTermOptions;
+        if (currentAdminAllowedTerms === null) return computedTermOptions;
+        const set = new Set(currentAdminAllowedTerms);
+        return computedTermOptions.filter((o) => set.has(o.value));
+    }, [computedTermOptions, currentAdminAllowedTerms, isSuperAdmin]);
+
+    // Hvis begrenset admin bare har én termin, auto-velg den i lærer-/studentfilter
+    const singleAllowedTerm = useMemo(() => {
+        if (isSuperAdmin) return null;
+        const arr = currentAdminAllowedTerms;
+        return Array.isArray(arr) && arr.length === 1 ? Number(arr[0]) : null;
+    }, [isSuperAdmin, currentAdminAllowedTerms]);
+    useEffect(() => {
+        if (singleAllowedTerm != null) {
+            if (teacherTermFilter === "all") setTeacherTermFilter(singleAllowedTerm);
+            if (studentTermFilter === "all") setStudentTermFilter(singleAllowedTerm);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [singleAllowedTerm]);
     useEffect(() => {
         const loadTerms = async () => {
             try {
@@ -273,6 +323,7 @@ const UsersAdmin: React.FC = () => {
     const [editAdminRole, setEditAdminRole] = useState<
         "student" | "teacher" | "admin"
     >("admin");
+    const [editAdminAllowedTerms, setEditAdminAllowedTerms] = useState<number[]>([]);
 
     useEffect(() => {
         const loadUsers = async () => {
@@ -332,6 +383,24 @@ const UsersAdmin: React.FC = () => {
     let students = filtered.filter((u) => u.role === "student");
     let admins = filtered.filter((u) => u.role === "admin");
 
+    // Gater synlighet etter innlogget admins allowedTerms (kun lærere og studenter).
+    // Krav: Alle admin skal kunne se alle andre admin → ingen gating for admins-listen.
+    // Superadmin: ingen gating i det hele tatt.
+    const gatedLists = (() => {
+        if (isSuperAdmin) return { teachers, students, admins };
+        const allowed = currentAdminAllowedTerms;
+        const hasGate = Array.isArray(allowed) && allowed.length > 0;
+        if (!hasGate) return { teachers, students, admins };
+        const set = new Set(allowed);
+        const teachersG = teachers.filter((u) => (u.allowedTerms ?? []).some((t) => set.has(Number(t))));
+        const studentsG = students.filter((u) => u.term != null && set.has(Number(u.term)));
+        const adminsG = admins; // ingen gating for admins
+        return { teachers: teachersG, students: studentsG, admins: adminsG };
+    })();
+    teachers = gatedLists.teachers;
+    students = gatedLists.students;
+    admins = gatedLists.admins;
+
     // Filter lærere på termin
     if (teacherTermFilter !== "all") {
         const tVal = teacherTermFilter as number;
@@ -344,6 +413,12 @@ const UsersAdmin: React.FC = () => {
     if (studentTermFilter !== "all") {
         const tVal = studentTermFilter as number;
         students = students.filter((u) => u.term === tVal);
+    }
+
+    // Filter admins på termin
+    if (adminTermFilter !== "all") {
+        const tVal = adminTermFilter as number;
+        admins = admins.filter((u) => (u.allowedTerms ?? []).includes(tVal));
     }
 
     // Sorter lærere
@@ -458,7 +533,8 @@ const UsersAdmin: React.FC = () => {
         setEditTeacherEmail("");
         setEditTeacherPhone("");
         setEditTeacherRole("teacher");
-        setEditTeacherAllowedTerms([]);
+        // Hvis admin bare har én tillatt termin, forhåndsvelg denne
+        setEditTeacherAllowedTerms(singleAllowedTerm != null ? [singleAllowedTerm] : []);
     };
 
     const handleSaveCreateTeacher = async () => {
@@ -491,7 +567,7 @@ const UsersAdmin: React.FC = () => {
                 email,
                 displayName: name || email,
                 name: name || email,
-                role: editTeacherRole,
+                role: "teacher",
                 term: null,
                 phone: phone || null,
                 allowedTerms: editTeacherAllowedTerms,
@@ -505,7 +581,7 @@ const UsersAdmin: React.FC = () => {
                         docId: uid,
                         email,
                         displayName: userDoc.displayName,
-                        role: editTeacherRole,
+                        role: "teacher",
                         term: null,
                         phone: phone || null,
                         allowedTerms: [...editTeacherAllowedTerms],
@@ -530,9 +606,66 @@ const UsersAdmin: React.FC = () => {
         } catch (err: any) {
             console.error("Feil ved oppretting av lærer:", err);
             if (err?.code === "auth/email-already-in-use") {
-                toast.error(
-                    "E-posten er allerede i bruk i Auth. Bruk en annen eller koble eksisterende bruker."
-                );
+                try {
+                    // Finn eksisterende bruker i Firestore og oppdater allowedTerms (union)
+                    const qExisting = query(collection(db, "users"), where("email", "==", email));
+                    const snapExisting = await getDocs(qExisting);
+                    if (snapExisting.empty) {
+                        toast.error(
+                            "E‑posten finnes allerede i Auth, men fant ingen bruker i Firestore. Kontakt administrator."
+                        );
+                        return;
+                    }
+                    const d = snapExisting.docs[0];
+                    const data = d.data() as any;
+                    const existingAllowed: number[] = Array.isArray(data?.allowedTerms)
+                        ? (data.allowedTerms as any[])
+                              .map((v) => (typeof v === "number" ? v : parseInt(String(v), 10)))
+                              .filter((v) => !Number.isNaN(v))
+                        : [];
+                    const unionSet = new Set<number>([...existingAllowed, ...editTeacherAllowedTerms]);
+                    const merged = Array.from(unionSet);
+
+                    await updateDoc(doc(db, "users", d.id), {
+                        role: "teacher",
+                        allowedTerms: merged,
+                        displayName: name || data?.displayName || data?.name || email,
+                        name: name || data?.name || data?.displayName || email,
+                        phone: phone || data?.phone || null,
+                    });
+
+                    setAllUsers((prev) => {
+                        const rowIdx = prev.findIndex((u) => u.docId === d.id);
+                        const nextRow: AdminUserRow = {
+                            docId: d.id,
+                            email,
+                            displayName: name || (data?.displayName ?? data?.name ?? email),
+                            role: "teacher",
+                            term: null,
+                            phone: phone || data?.phone || null,
+                            allowedTerms: merged,
+                        };
+                        if (rowIdx >= 0) {
+                            const clone = prev.slice();
+                            clone[rowIdx] = { ...clone[rowIdx], ...nextRow };
+                            return clone;
+                        }
+                        const next = [nextRow, ...prev];
+                        next.sort((a, b) =>
+                            (a.displayName ?? "").localeCompare(b.displayName ?? "", "nb-NO", {
+                                sensitivity: "base",
+                            })
+                        );
+                        return next;
+                    });
+
+                    setTeacherModalMode(null);
+                    setTeacherModalUser(null);
+                    toast.success("Eksisterende bruker oppdatert som lærer og tildelt valgte terminer.");
+                } catch (e) {
+                    console.error("Kunne ikke oppdatere eksisterende lærer:", e);
+                    toast.error("Kunne ikke oppdatere eksisterende bruker med nye terminer.");
+                }
             } else {
                 toast.error("Kunne ikke opprette lærer. Se console for mer info.");
             }
@@ -620,7 +753,8 @@ const UsersAdmin: React.FC = () => {
         setEditStudentEmail("");
         setEditStudentPhone("");
         setEditStudentRole("student");
-        setEditStudentTerm(null);
+        // Hvis admin bare har én tillatt termin, forhåndsvelg denne
+        setEditStudentTerm(singleAllowedTerm != null ? singleAllowedTerm : null);
     };
 
     const handleSaveCreateStudent = async () => {
@@ -666,7 +800,7 @@ const UsersAdmin: React.FC = () => {
                 email,
                 displayName: name || email,
                 name: name || email,
-                role: editStudentRole,
+                role: "student",
                 term: editStudentTerm,
                 phone: phone || null,
                 allowedTerms: [] as number[],
@@ -680,7 +814,7 @@ const UsersAdmin: React.FC = () => {
                         docId: uid,
                         email,
                         displayName: userDoc.displayName,
-                        role: editStudentRole,
+                        role: "student",
                         term: editStudentTerm,
                         phone: phone || null,
                         allowedTerms: [],
@@ -707,12 +841,61 @@ const UsersAdmin: React.FC = () => {
         } catch (err: any) {
             console.error("Feil ved oppretting av student:", err);
             if (err?.code === "auth/invalid-email") {
-                // Spesifikk feilmelding i UI – ikke kun i console
                 toast.error("Ugyldig e‑post.");
             } else if (err?.code === "auth/email-already-in-use") {
-                toast.error(
-                    "E-posten er allerede i bruk i Auth. Bruk en annen eller koble eksisterende bruker."
-                );
+                try {
+                    // Oppdater eksisterende bruker i Firestore til valgt termin
+                    const qExisting = query(collection(db, "users"), where("email", "==", email));
+                    const snapExisting = await getDocs(qExisting);
+                    if (snapExisting.empty) {
+                        toast.error(
+                            "E‑posten finnes allerede i Auth, men fant ingen bruker i Firestore. Kontakt administrator."
+                        );
+                        return;
+                    }
+                    const d = snapExisting.docs[0];
+                    const data = d.data() as any;
+                    await updateDoc(doc(db, "users", d.id), {
+                        role: "student",
+                        term: editStudentTerm,
+                        displayName: name || data?.displayName || data?.name || email,
+                        name: name || data?.name || data?.displayName || email,
+                        phone: phone || data?.phone || null,
+                    });
+
+                    setAllUsers((prev) => {
+                        const rowIdx = prev.findIndex((u) => u.docId === d.id);
+                        const nextRow: AdminUserRow = {
+                            docId: d.id,
+                            email,
+                            displayName: name || (data?.displayName ?? data?.name ?? email),
+                            role: "student",
+                            term: editStudentTerm,
+                            phone: phone || data?.phone || null,
+                            allowedTerms: Array.isArray(data?.allowedTerms) ? data.allowedTerms : [],
+                        };
+                        if (rowIdx >= 0) {
+                            const clone = prev.slice();
+                            clone[rowIdx] = { ...clone[rowIdx], ...nextRow };
+                            return clone;
+                        }
+                        const next = [nextRow, ...prev];
+                        next.sort((a, b) =>
+                            (a.displayName ?? "").localeCompare(b.displayName ?? "", "nb-NO", {
+                                sensitivity: "base",
+                            })
+                        );
+                        return next;
+                    });
+
+                    setStudentModalMode(null);
+                    setStudentModalUser(null);
+                    const termLbl = shortLabelFromTerm(computedTermOptions, editStudentTerm!);
+                    toast.success(`Eksisterende bruker oppdatert til termin ${termLbl}.`);
+                } catch (e) {
+                    console.error("Kunne ikke oppdatere eksisterende student:", e);
+                    toast.error("Kunne ikke oppdatere eksisterende bruker med valgt termin.");
+                }
             } else if (err?.code === "auth/missing-email") {
                 toast.error("E‑post mangler.");
             } else {
@@ -793,6 +976,7 @@ const UsersAdmin: React.FC = () => {
         setEditAdminEmail("");
         setEditAdminPhone("");
         setEditAdminRole("admin");
+        setEditAdminAllowedTerms([]);
     };
 
     const handleSaveCreateAdmin = async () => {
@@ -807,6 +991,11 @@ const UsersAdmin: React.FC = () => {
 
         if (!phone) {
             toast.error("Mobilnummer må fylles ut for å opprette admin.");
+            return;
+        }
+
+        if (!editAdminAllowedTerms || editAdminAllowedTerms.length === 0) {
+            toast.error("Velg minst én termin administratoren skal ha tilgang til.");
             return;
         }
 
@@ -825,10 +1014,10 @@ const UsersAdmin: React.FC = () => {
                 email,
                 displayName: name || email,
                 name: name || email,
-                role: editAdminRole, // typisk 'admin'
+                role: "admin", // rolle er implisitt fra fanen
                 term: null,
                 phone,               // alltid satt pga valideringen over
-                allowedTerms: [] as number[],
+                allowedTerms: editAdminAllowedTerms,
             };
 
             await setDoc(doc(db, "users", uid), userDoc, { merge: true });
@@ -839,10 +1028,10 @@ const UsersAdmin: React.FC = () => {
                         docId: uid,
                         email,
                         displayName: userDoc.displayName,
-                        role: editAdminRole,
+                        role: "admin",
                         term: null,
                         phone,
-                        allowedTerms: [],
+                        allowedTerms: [...editAdminAllowedTerms],
                     },
                     ...prev,
                 ];
@@ -880,6 +1069,7 @@ const UsersAdmin: React.FC = () => {
         setEditAdminEmail(u.email);
         setEditAdminPhone(u.phone ?? "");
         setEditAdminRole(u.role);
+        setEditAdminAllowedTerms(u.allowedTerms ?? []);
     };
 
     const handleSaveEditAdmin = async () => {
@@ -904,6 +1094,7 @@ const UsersAdmin: React.FC = () => {
                 email: editAdminEmail,
                 phone: editAdminPhone || null,
                 role: editAdminRole,
+                allowedTerms: editAdminAllowedTerms,
             });
 
             setAllUsers((prev) =>
@@ -915,6 +1106,7 @@ const UsersAdmin: React.FC = () => {
                             email: editAdminEmail,
                             phone: editAdminPhone || null,
                             role: editAdminRole,
+                            allowedTerms: [...editAdminAllowedTerms],
                         }
                         : u
                 )
@@ -931,6 +1123,14 @@ const UsersAdmin: React.FC = () => {
     const closeAdminModal = () => {
         setAdminModalMode(null);
         setAdminModalUser(null);
+    };
+
+    const toggleAllowedTermInAdminModal = (termValue: number) => {
+        setEditAdminAllowedTerms((prev) =>
+            prev.includes(termValue)
+                ? prev.filter((v) => v !== termValue)
+                : [...prev, termValue]
+        );
     };
 
     // ---------- RENDER ----------
@@ -953,7 +1153,7 @@ const UsersAdmin: React.FC = () => {
                         flex: 1,
                         padding: "0.35rem 0.5rem",
                         borderRadius: "999px",
-                        border: "1px solid #d1d5db",
+                        border: activeTab === "students" ? "1px solid #6CE1AB" : "1px solid #d1d5db",
                         background: activeTab === "students" ? "#6CE1AB" : "#ffffff",
                         color: activeTab === "students" ? "black" : "#111827",
                         fontSize: "0.85rem",
@@ -968,8 +1168,7 @@ const UsersAdmin: React.FC = () => {
                     style={{
                         flex: 1,
                         padding: "0.35rem 0.5rem",
-                        borderRadius: "999px",
-                        border: "1px solid #d1d5db",
+                        border: activeTab === "teachers" ? "1px solid #6CE1AB" : "1px solid #d1d5db",
                         background: activeTab === "teachers" ? "#6CE1AB" : "#ffffff",
                         color: activeTab === "teachers" ? "black" : "#111827",
                         fontSize: "0.85rem",
@@ -985,7 +1184,7 @@ const UsersAdmin: React.FC = () => {
                         flex: 1,
                         padding: "0.35rem 0.5rem",
                         borderRadius: "999px",
-                        border: "1px solid #d1d5db",
+                        border: activeTab === "admins" ? "1px solid #6CE1AB" : "1px solid #d1d5db",
                         background: activeTab === "admins" ? "#6CE1AB" : "#ffffff",
                         color: activeTab === "admins" ? "black" : "#111827",
                         fontSize: "0.85rem",
@@ -1045,7 +1244,7 @@ const UsersAdmin: React.FC = () => {
                                             }}
                                         >
                                             <option value="">Alle terminer</option>
-                                            {computedTermOptions.map((opt) => (
+                                            {allowedTermOptions.map((opt) => (
                                                 <option key={opt.value} value={opt.value}>
                                                     {opt.label}
                                                 </option>
@@ -1202,7 +1401,7 @@ const UsersAdmin: React.FC = () => {
                                             }}
                                         >
                                             <option value="">Alle terminer</option>
-                                            {computedTermOptions.map((opt) => (
+                                            {allowedTermOptions.map((opt) => (
                                                 <option key={opt.value} value={opt.value}>
                                                     {opt.label}
                                                 </option>
@@ -1334,11 +1533,37 @@ const UsersAdmin: React.FC = () => {
                                 style={{
                                     display: "flex",
                                     flexWrap: "wrap",
-                                    justifyContent: "end",
+                                    justifyContent: "space-between",
                                     gap: "0.5rem",
                                     marginBottom: "0.4rem",
                                 }}
                             >
+                                <div style={{ fontSize: "0.8rem" }}>
+                                    <label>
+                                        <select
+                                            value={adminTermFilter === "all" ? "" : adminTermFilter}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setAdminTermFilter(
+                                                    val === "" ? "all" : parseInt(val, 10)
+                                                );
+                                            }}
+                                            style={{
+                                                padding: "0.2rem 0.4rem",
+                                                borderRadius: "0.5rem",
+                                                border: "1px solid #d1d5db",
+                                                fontSize: "0.8rem",
+                                            }}
+                                        >
+                                            <option value="">Alle terminer</option>
+                                            {computedTermOptions.map((opt) => (
+                                                <option key={opt.value} value={opt.value}>
+                                                    {opt.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                </div>
                                 <button
                                     type="button"
                                     onClick={openCreateAdminModal}
@@ -1549,29 +1774,31 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
-                                Rolle
-                                <select
-                                    value={editTeacherRole}
-                                    onChange={(e) =>
-                                        setEditTeacherRole(
-                                            e.target.value as "student" | "teacher" | "admin"
-                                        )
-                                    }
-                                    style={{
-                                        width: "100%",
-                                        padding: "0.3rem 0.45rem",
-                                        borderRadius: "0.5rem",
-                                        border: "1px solid #d1d5db",
-                                        fontSize: "0.85rem",
-                                        marginTop: "0.15rem",
-                                    }}
-                                >
-                                    <option value="teacher">Lærer</option>
-                                    <option value="student">Student</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                            </label>
+                            {teacherModalMode === "edit" && (
+                                <label style={{ fontSize: "0.8rem" }}>
+                                    Rolle
+                                    <select
+                                        value={editTeacherRole}
+                                        onChange={(e) =>
+                                            setEditTeacherRole(
+                                                e.target.value as "student" | "teacher" | "admin"
+                                            )
+                                        }
+                                        style={{
+                                            width: "100%",
+                                            padding: "0.3rem 0.45rem",
+                                            borderRadius: "0.5rem",
+                                            border: "1px solid #d1d5db",
+                                            fontSize: "0.85rem",
+                                            marginTop: "0.15rem",
+                                        }}
+                                    >
+                                        <option value="teacher">Lærer</option>
+                                        <option value="student">Student</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </label>
+                            )}
 
                             <div style={{ fontSize: "0.8rem" }}>
                                 <div style={{ marginBottom: "0.25rem" }}>
@@ -1586,7 +1813,7 @@ const UsersAdmin: React.FC = () => {
                                         padding: "0.35rem 0.45rem",
                                     }}
                                 >
-                                    {computedTermOptions.map((opt) => (
+                                    {(allowedTermOptions.length === 0 ? [] : allowedTermOptions).map((opt) => (
                                         <label
                                             key={opt.value}
                                             style={{
@@ -1634,21 +1861,13 @@ const UsersAdmin: React.FC = () => {
                                 Avbryt
                             </button>
                             <button
+                                className={"button button-green"}
                                 type="button"
                                 onClick={
                                     teacherModalMode === "create"
                                         ? handleSaveCreateTeacher
                                         : handleSaveEditTeacher
                                 }
-                                style={{
-                                    padding: "0.3rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    backgroundColor: "#16a34a",
-                                    color: "#ffffff",
-                                    fontSize: "0.85rem",
-                                    cursor: "pointer",
-                                }}
                             >
                                 {teacherModalMode === "create" ? "Opprett lærer" : "Lagre"}
                             </button>
@@ -1755,29 +1974,31 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
-                                Rolle
-                                <select
-                                    value={editStudentRole}
-                                    onChange={(e) =>
-                                        setEditStudentRole(
-                                            e.target.value as "student" | "teacher" | "admin"
-                                        )
-                                    }
-                                    style={{
-                                        width: "100%",
-                                        padding: "0.3rem 0.45rem",
-                                        borderRadius: "0.5rem",
-                                        border: "1px solid #d1d5db",
-                                        fontSize: "0.85rem",
-                                        marginTop: "0.15rem",
-                                    }}
-                                >
-                                    <option value="student">Student</option>
-                                    <option value="teacher">Lærer</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                            </label>
+                            {studentModalMode === "edit" && (
+                                <label style={{ fontSize: "0.8rem" }}>
+                                    Rolle
+                                    <select
+                                        value={editStudentRole}
+                                        onChange={(e) =>
+                                            setEditStudentRole(
+                                                e.target.value as "student" | "teacher" | "admin"
+                                            )
+                                        }
+                                        style={{
+                                            width: "100%",
+                                            padding: "0.3rem 0.45rem",
+                                            borderRadius: "0.5rem",
+                                            border: "1px solid #d1d5db",
+                                            fontSize: "0.85rem",
+                                            marginTop: "0.15rem",
+                                        }}
+                                    >
+                                        <option value="student">Student</option>
+                                        <option value="teacher">Lærer</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </label>
+                            )}
 
                             <label style={{ fontSize: "0.8rem" }}>
                                 Termin
@@ -1797,13 +2018,15 @@ const UsersAdmin: React.FC = () => {
                                     }}
                                 >
                                     <option value="">Ingen</option>
-                                    {computedTermOptions.map((opt) => (
+                                    {(allowedTermOptions.length === 0 ? [] : allowedTermOptions).map((opt) => (
                                         <option key={opt.value} value={opt.value}>
                                             {opt.label}
                                         </option>
                                     ))}
                                 </select>
                             </label>
+                        
+                            
                         </div>
 
                         <div
@@ -1950,29 +2173,71 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
-                                Rolle
-                                <select
-                                    value={editAdminRole}
-                                    onChange={(e) =>
-                                        setEditAdminRole(
-                                            e.target.value as "student" | "teacher" | "admin"
-                                        )
-                                    }
+                            {adminModalMode === "edit" && (
+                                <label style={{ fontSize: "0.8rem" }}>
+                                    Rolle
+                                    <select
+                                        value={editAdminRole}
+                                        onChange={(e) =>
+                                            setEditAdminRole(
+                                                e.target.value as "student" | "teacher" | "admin"
+                                            )
+                                        }
+                                        style={{
+                                            width: "100%",
+                                            padding: "0.3rem 0.45rem",
+                                            borderRadius: "0.5rem",
+                                            border: "1px solid #d1d5db",
+                                            fontSize: "0.85rem",
+                                            marginTop: "0.15rem",
+                                        }}
+                                    >
+                                        <option value="admin">Admin</option>
+                                        <option value="teacher">Lærer</option>
+                                        <option value="student">Student</option>
+                                    </select>
+                                </label>
+                            )}
+
+                            {/* Termin(er) administratoren skal ha tilgang til */}
+                            <div style={{ fontSize: "0.8rem" }}>
+                                <div style={{ marginBottom: "0.25rem" }}>
+                                    Termin(er) admin kan administrere:
+                                </div>
+                                <div
                                     style={{
-                                        width: "100%",
-                                        padding: "0.3rem 0.45rem",
+                                        maxHeight: "150px",
+                                        overflowY: "auto",
                                         borderRadius: "0.5rem",
-                                        border: "1px solid #d1d5db",
-                                        fontSize: "0.85rem",
-                                        marginTop: "0.15rem",
+                                        border: "1px solid #e5e7eb",
+                                        padding: "0.35rem 0.45rem",
                                     }}
                                 >
-                                    <option value="admin">Admin</option>
-                                    <option value="teacher">Lærer</option>
-                                    <option value="student">Student</option>
-                                </select>
-                            </label>
+                                    {allowedTermOptions.length === 0 ? (
+                                        <div style={{ color: "#6b7280" }}>Ingen terminer tilgjengelig</div>
+                                    ) : (
+                                        allowedTermOptions.map((opt) => (
+                                            <label
+                                                key={opt.value}
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "0.35rem",
+                                                    fontSize: "0.8rem",
+                                                    padding: "0.15rem 0",
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={editAdminAllowedTerms.includes(opt.value)}
+                                                    onChange={() => toggleAllowedTermInAdminModal(opt.value)}
+                                                />
+                                                <span>{opt.label}</span>
+                                            </label>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         <div
@@ -2035,6 +2300,26 @@ const TermsAdmin: React.FC = () => {
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [orderDirty, setOrderDirty] = useState(false);
 
+    // Superadmin kan administrere terminer (legg til / lagre rekkefølge). Andre kan kun se.
+    const { user: authUser } = useAuth();
+    const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
+    useEffect(() => {
+        const loadMine = async () => {
+            try {
+                if (!authUser?.uid) return;
+                const meRef = doc(db, "users", authUser.uid);
+                const snap = await getDoc(meRef);
+                const data = snap.exists() ? (snap.data() as any) : null;
+                setIsSuperAdmin(Boolean(data?.isSuperAdmin));
+            } catch (e) {
+                console.warn("Kunne ikke hente isSuperAdmin for innlogget admin (TermsAdmin):", e);
+                setIsSuperAdmin(false);
+            }
+        };
+        void loadMine();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authUser?.uid]);
+
     useEffect(() => {
         const load = async () => {
             try {
@@ -2062,6 +2347,10 @@ const TermsAdmin: React.FC = () => {
     }, []);
 
     const handleAdd = async () => {
+        if (!isSuperAdmin) {
+            // Bare superadmin kan legge til termin
+            return;
+        }
         try {
             setAdding(true);
             const maxVal = terms.length > 0 ? Math.max(...terms.map((t) => t.value)) : 0;
@@ -2129,6 +2418,10 @@ const TermsAdmin: React.FC = () => {
     };
 
     const handleSaveOrder = async () => {
+        if (!isSuperAdmin) {
+            // Bare superadmin kan lagre rekkefølge
+            return;
+        }
         try {
             const batch = writeBatch(db);
             terms.forEach((t, idx) => {
@@ -2148,7 +2441,7 @@ const TermsAdmin: React.FC = () => {
                 <button
                     type="button"
                     onClick={handleAdd}
-                    disabled={adding}
+                    disabled={adding || !isSuperAdmin}
                     style={{
                         padding: "0.45rem 0.9rem",
                         borderRadius: "999px",
@@ -2156,7 +2449,7 @@ const TermsAdmin: React.FC = () => {
                         backgroundColor: "#dc2626",
                         color: "#ffffff",
                         fontSize: "0.9rem",
-                        cursor: adding ? "not-allowed" : "pointer",
+                        cursor: adding || !isSuperAdmin ? "not-allowed" : "pointer",
                         whiteSpace: "nowrap",
                     }}
                 >
@@ -2165,15 +2458,15 @@ const TermsAdmin: React.FC = () => {
                 <button
                     type="button"
                     onClick={handleSaveOrder}
-                    disabled={!orderDirty}
+                    disabled={!orderDirty || !isSuperAdmin}
                     style={{
                         padding: "0.45rem 0.9rem",
                         borderRadius: "999px",
                         border: "1px solid #d1d5db",
-                        backgroundColor: orderDirty ? "#ffffff" : "#f3f4f6",
+                        backgroundColor: orderDirty && isSuperAdmin ? "#ffffff" : "#f3f4f6",
                         color: "#111827",
                         fontSize: "0.9rem",
-                        cursor: orderDirty ? "pointer" : "not-allowed",
+                        cursor: orderDirty && isSuperAdmin ? "pointer" : "not-allowed",
                         whiteSpace: "nowrap",
                     }}
                 >
@@ -2301,6 +2594,56 @@ const TermSetup: React.FC = () => {
     const [termSortList, setTermSortList] = useState<TermDoc[]>([]);
     const [showGroupSort, setShowGroupSort] = useState(false);
     const [groupSortList, setGroupSortList] = useState<Requirement[]>([]);
+
+    // Begrens redigering til terminer den innloggede adminen kan administrere
+    const { user: authUser } = useAuth();
+    const [myAllowedTerms, setMyAllowedTerms] = useState<number[] | null>(null);
+    const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
+    useEffect(() => {
+        const loadMine = async () => {
+            try {
+                if (!authUser?.uid) return;
+                const meRef = doc(db, "users", authUser.uid);
+                const snap = await getDoc(meRef);
+                const data = snap.exists() ? (snap.data() as any) : null;
+                const arr = Array.isArray(data?.allowedTerms) ? data.allowedTerms : [];
+                const cleaned = (arr as any[])
+                    .map((v) => (typeof v === "number" ? v : parseInt(String(v), 10)))
+                    .filter((v) => !Number.isNaN(v));
+                setMyAllowedTerms(cleaned);
+                setIsSuperAdmin(Boolean(data?.isSuperAdmin));
+            } catch (e) {
+                console.warn("Kunne ikke hente allowedTerms for innlogget admin (TermSetup):", e);
+                setMyAllowedTerms([]);
+                setIsSuperAdmin(false);
+            }
+        };
+        void loadMine();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authUser?.uid]);
+    const hasGate = useMemo(() => {
+        if (isSuperAdmin) return false; // superadmin: ingen gating
+        return Array.isArray(myAllowedTerms) && myAllowedTerms.length > 0;
+    }, [isSuperAdmin, myAllowedTerms]);
+    const allowedSet = useMemo(() => {
+        return hasGate ? new Set<number>(myAllowedTerms as number[]) : null;
+    }, [hasGate, myAllowedTerms]);
+    // Auto-select the only allowed term for non-superadmins
+    useEffect(() => {
+        if (isSuperAdmin) return; // superadmin: no auto-selection
+        if (!hasGate) return; // no gating / not loaded yet
+        if (!myAllowedTerms || myAllowedTerms.length !== 1) return;
+        if (selectedTerm === "") {
+            setSelectedTerm(myAllowedTerms[0]!);
+        }
+    }, [isSuperAdmin, hasGate, myAllowedTerms, selectedTerm]);
+    // Hvis valgt termin ikke er tillatt, nullstill valget når tilganger er lastet
+    useEffect(() => {
+        if (!hasGate) return; // ingen gating før lastet eller når tom liste (superadmin)
+        if (selectedTerm !== "" && allowedSet && !allowedSet.has(selectedTerm as number)) {
+            setSelectedTerm("");
+        }
+    }, [hasGate, allowedSet, selectedTerm]);
 
     useEffect(() => {
         const loadAll = async () => {
@@ -2979,7 +3322,7 @@ const TermSetup: React.FC = () => {
                 }}
             >
                 <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                    {isEditingTermLabel ? (
+                    {isEditingTermLabel && isSuperAdmin ? (
                         <input
                             ref={termLabelInputRef}
                             type="text"
@@ -3009,6 +3352,10 @@ const TermSetup: React.FC = () => {
                             onChange={(e) => {
                                 const v = e.target.value;
                                 if (v === "__new__") {
+                                    if (hasGate) {
+                                        // Begrenset admin kan ikke opprette nye oppmøtebøker
+                                        return;
+                                    }
                                     void createNewTerm();
                                     return;
                                 }
@@ -3020,63 +3367,68 @@ const TermSetup: React.FC = () => {
                                 padding: "0.35rem 0.5rem",
                                 borderRadius: "0.5rem",
                                 border: "1px solid #d1d5db",
+                                // Full width when no admin actions are shown (non-superadmin)
+                                width: isSuperAdmin ? undefined : "100%",
                             }}
                         >
                             <option value="" disabled>
                                 Velg termin
                             </option>
-                            {termOptionsWithOverrides.map((opt) => (
+                            {(!hasGate
+                                ? termOptionsWithOverrides
+                                : termOptionsWithOverrides.filter((opt) => allowedSet?.has(opt.value)))
+                                .map((opt) => (
                                 <option key={opt.value} value={opt.value}>
                                     {opt.label}
                                 </option>
                             ))}
-                            <option value="__new__">+ Ny oppmøtebok</option>
+                            {!hasGate && <option value="__new__">+ Ny oppmøtebok</option>}
                         </select>
                     )}
-                    <button
-                        type="button"
-                        disabled={selectedTerm === "" && !isEditingTermLabel}
-                        onClick={() => {
-                            if (isEditingTermLabel) {
-                                void saveInlineRename();
-                            } else {
-                                startInlineRename();
-                            }
-                        }}
-                        style={{
-                            width: "160px",
-                            padding: "0.45rem 0.9rem",
-                            borderRadius: "999px",
-                            border: "none",
-                            backgroundColor: "#6CE1AB",
-                            color: "black",
-                            fontSize: "0.9rem",
-                            cursor:
-                                selectedTerm === "" && !isEditingTermLabel
-                                    ? "not-allowed"
-                                    : "pointer",
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        {isEditingTermLabel ? "Lagre" : "Endre navn"}
-                    </button>
+                    {isSuperAdmin && (
+                        <button
+                            className={"button-green"}
+                            type="button"
+                            disabled={selectedTerm === "" && !isEditingTermLabel}
+                            onClick={() => {
+                                if (isEditingTermLabel) {
+                                    void saveInlineRename();
+                                } else {
+                                    startInlineRename();
+                                }
+                            }}
+                            style={{
+                                width: "160px",
+                                padding: "0.45rem 0.9rem",
+                                cursor:
+                                    selectedTerm === "" && !isEditingTermLabel
+                                        ? "not-allowed"
+                                        : "pointer",
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            {isEditingTermLabel ? "Lagre" : "Endre navn"}
+                        </button>
+                    )}
                     {/* Sort terms button */}
-                    <button
-                        type="button"
-                        title="Sorter oppmøtebøker"
-                        disabled={terms.length === 0}
-                        onClick={openTermSort}
-                        style={{
-                            padding: "0.35rem 0.5rem",
-                            borderRadius: "0.5rem",
-                            border: "1px solid #d1d5db",
-                            background: "#ffffff",
-                            fontSize: "0.9rem",
-                            cursor: terms.length === 0 ? "not-allowed" : "pointer",
-                        }}
-                    >
-                        ⇅
-                    </button>
+                    {isSuperAdmin && (
+                        <button
+                            type="button"
+                            title="Sorter oppmøtebøker"
+                            disabled={terms.length === 0}
+                            onClick={openTermSort}
+                            style={{
+                                padding: "0.35rem 0.5rem",
+                                borderRadius: "0.5rem",
+                                border: "1px solid #d1d5db",
+                                background: "#ffffff",
+                                fontSize: "0.9rem",
+                                cursor: terms.length === 0 ? "not-allowed" : "pointer",
+                            }}
+                        >
+                            ⇅
+                        </button>
+                    )}
                 </div>
 
                 <div
@@ -3087,38 +3439,49 @@ const TermSetup: React.FC = () => {
                         alignItems: "center",
                     }}
                 >
+                    {(() => {
+                        const termVal = selectedTerm === "" ? null : Number(selectedTerm);
+                        const t = termVal != null ? terms.find((x) => x.value === termVal) : undefined;
+                        const hasName = !!t?.label && t.label.trim().length > 0;
+                        const override = termVal != null ? termLabelOverrides[termVal] : undefined;
+                        const hasOverride = !!override && override.trim().length > 0;
+                        // Redigeringskrav: kontroller er kun aktive når en termin er valgt OG har lagret navn
+                        const canEditGroups = termVal != null && (hasName || hasOverride);
+                        return (
+                            <>
                     <input
                         type="text"
                         placeholder="Ny gruppe..."
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
                         onKeyDown={(e) => {
-                            if (e.key === "Enter") {
+                            if (e.key === "Enter" && canEditGroups) {
                                 e.preventDefault();
                                 void handleAddCategory();
                             }
                         }}
+                        disabled={!canEditGroups}
                         style={{
                             flex: 1,
                             minWidth: 0,
                             padding: "0.35rem 0.5rem",
                             borderRadius: "0.5rem",
                             border: "1px solid #d1d5db",
+                            opacity: canEditGroups ? 1 : 0.6,
+                            cursor: canEditGroups ? "text" : "not-allowed",
                         }}
                     />
                     <button
+                        className={"button-green"}
                         type="button"
                         onClick={handleAddCategory}
+                        disabled={!canEditGroups}
                         style={{
                             width: "160px",
                             padding: "0.45rem 0.9rem",
-                            borderRadius: "999px",
-                            border: "none",
-                            backgroundColor: "#6CE1AB",
-                            color: "black",
-                            fontSize: "0.9rem",
-                            cursor: "pointer",
+                            cursor: canEditGroups ? "pointer" : "not-allowed",
                             whiteSpace: "nowrap",
+                            opacity: canEditGroups ? 1 : 0.7,
                         }}
                     >
                         Legg til gruppe
@@ -3127,7 +3490,7 @@ const TermSetup: React.FC = () => {
                     <button
                         type="button"
                         title="Sorter grupper"
-                        disabled={selectedTerm === "" || requirementsForTerm.length === 0}
+                        disabled={!canEditGroups || requirementsForTerm.length === 0}
                         onClick={openGroupSort}
                         style={{
                             padding: "0.35rem 0.5rem",
@@ -3136,21 +3499,33 @@ const TermSetup: React.FC = () => {
                             background: "#ffffff",
                             fontSize: "0.9rem",
                             cursor:
-                                selectedTerm === "" || requirementsForTerm.length === 0
+                                !canEditGroups || requirementsForTerm.length === 0
                                     ? "not-allowed"
                                     : "pointer",
+                            opacity: !canEditGroups || requirementsForTerm.length === 0 ? 0.7 : 1,
                         }}
                     >
                         ⇅
                     </button>
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
 
-            {requirementsForTerm.length === 0 ? (
-                <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-                    Ingen grupper definert ennå for {labelForTerm(selectedTerm as number)}.
-                </p>
-            ) : (
+            {(() => {
+                const termVal = selectedTerm === "" ? null : Number(selectedTerm);
+                const t = termVal != null ? terms.find((x) => x.value === termVal) : undefined;
+                const hasName = !!t?.label && t.label.trim().length > 0;
+                const override = termVal != null ? termLabelOverrides[termVal] : undefined;
+                const hasOverride = !!override && override.trim().length > 0;
+                const canEditGroups = termVal != null && (hasName || hasOverride);
+                if (!canEditGroups) return null; // Skjul tom-tekst før termin har navn
+                return requirementsForTerm.length === 0 ? (
+                    <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+                        Ingen grupper definert ennå for {labelForTerm(selectedTerm as number)}.
+                    </p>
+                ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                     {requirementsForTerm.map((req) => {
                         const key = req.id;
@@ -3511,10 +3886,11 @@ const TermSetup: React.FC = () => {
                         );
                     })}
                 </div>
-            )}
+                );
+            })()}
 
             {/* Bottom action: delete whole term with all its groups and times */}
-            {selectedTerm !== "" && (
+            {selectedTerm !== "" && isSuperAdmin && (
                 <div
                     style={{
                         marginTop: "1rem",
@@ -3523,16 +3899,14 @@ const TermSetup: React.FC = () => {
                     }}
                 >
                     <button
+                        className={"btn-hover-danger"}
                         type="button"
                         onClick={openDeleteTermModal}
                         style={{
-                            padding: "0.5rem 0.9rem",
-                            borderRadius: "999px",
-                            border: "none",
                             backgroundColor: "#ef4444",
-                            color: "#ffffff",
+                            borderColor: "#ef4444",
+                            color: "black",
                             fontSize: "0.9rem",
-                            cursor: "pointer",
                         }}
                     >
                         Slett termin
@@ -3559,6 +3933,7 @@ const TermSetup: React.FC = () => {
                     <div
                         className="page-card"
                         style={{
+                            textAlign: "center",
                             maxWidth: 520,
                             width: "100%",
                             background: "#ffffff",
@@ -3566,40 +3941,41 @@ const TermSetup: React.FC = () => {
                     >
                         <h3 style={{ marginTop: 0 }}>Slett termin?</h3>
                         <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
-                            {`Du er i ferd med å slette «${deleteTermModal.termLabel}».\n\n`}
-                            {`Dette vil slette selve terminen, alle grupper/krav (${deleteTermModal.reqCount}) og alle timer (${deleteTermModal.timeCount}) som tilhører denne terminen.\n`}
-                            {`Handlingen kan ikke angres.`}
+                            {`Du er i ferd med å slette oppmøteboka for «${deleteTermModal.termLabel}».\n\n`}
+                            {`Dette vil slette selve terminen, alle grupper (${deleteTermModal.reqCount} stk) og alle timer (${deleteTermModal.timeCount} stk) som tilhører denne terminen.\n`}
                         </p>
                         <div
                             style={{
                                 display: "flex",
                                 gap: "0.5rem",
-                                justifyContent: "flex-end",
+                                justifyContent: "center",
                                 marginTop: "0.75rem",
                             }}
                         >
                             <button
+                                className={"btn-hover-danger"}
                                 type="button"
                                 onClick={cancelDeleteTermModal}
                                 style={{
                                     padding: "0.45rem 0.9rem",
                                     borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    background: "#ffffff",
+                                    border: "none",
+                                    background: "#ef4444",
+                                    color: "black",
                                     cursor: "pointer",
                                 }}
                             >
                                 Avbryt
                             </button>
                             <button
+                                className={"btn-hover-lg"}
                                 type="button"
                                 onClick={() => void confirmDeleteTermModal()}
                                 style={{
                                     padding: "0.45rem 0.9rem",
                                     borderRadius: "999px",
-                                    border: "none",
-                                    background: "#ef4444",
-                                    color: "#ffffff",
+                                    border: "1px solid #d1d5db",
+                                    background: "#ffffff",
                                     cursor: "pointer",
                                 }}
                             >
@@ -4025,7 +4401,7 @@ const AdminPage: React.FC = () => {
                             color: "#6b7280",
                         }}
                     >
-                        Oppsett av oppmø og administrasjon av brukere.
+                        Oppsett av oppmøtebøker og administrasjon av brukere.
                     </p>
 
                     {/* Øverste knapper: Oppmøtebøker / Brukere */}

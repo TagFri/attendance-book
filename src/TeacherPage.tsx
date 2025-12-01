@@ -86,6 +86,12 @@ function TeacherPage({ user }: TeacherPageProps) {
     const [studentSearch, setStudentSearch] = useState("");
     const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
 
+    // Bekreftelsesmodal for fjerning av registrert student
+    const [deleteAttendeeModal, setDeleteAttendeeModal] = useState<{
+        open: boolean;
+        attendee: AttendanceRow | null;
+    }>({ open: false, attendee: null });
+
     // Session countdown (120s) state
     const [remainingSeconds, setRemainingSeconds] = useState<number>(120);
 
@@ -393,6 +399,75 @@ function TeacherPage({ user }: TeacherPageProps) {
         setSelectedTerm(item.term);
         setSearchTerm(item.name);
         setShowSuggestions(false);
+
+        // Finn eksisterende økt for denne timen (prøv med indeks først, ellers fallback uten indeks)
+        let foundDoc: any | undefined;
+        try {
+            const qSessions = query(
+                collection(db, "sessions"),
+                where("teacherId", "==", user.uid),
+                where("timeId", "==", item.timeId),
+                orderBy("createdAt", "desc"),
+                limit(1)
+            );
+            const snap = await getDocs(qSessions);
+            foundDoc = snap.docs[0];
+        } catch (_) {
+            // Fallback: hent alle lærerens økter og finn siste for denne timeId lokalt (unngår krav om sammensatt indeks)
+            try {
+                const qFallback = query(collection(db, "sessions"), where("teacherId", "==", user.uid));
+                const snap2 = await getDocs(qFallback);
+                const docs = snap2.docs
+                    .filter((d) => String((d.data() as any)?.timeId ?? "") === String(item.timeId))
+                    .sort((a, b) => {
+                        const ta = ((a.data() as any)?.createdAt as Timestamp | undefined)?.toMillis?.() ?? 0;
+                        const tb = ((b.data() as any)?.createdAt as Timestamp | undefined)?.toMillis?.() ?? 0;
+                        return tb - ta;
+                    });
+                foundDoc = docs[0];
+            } catch {
+                // Ignorer
+            }
+        }
+
+        if (foundDoc) {
+            const data = foundDoc.data() as any;
+            // Lukk evt. nåværende aktiv økt hvis det er en annen enn den vi åpner
+            if (activeSession && activeSession.id !== foundDoc.id) {
+                try {
+                    await updateDoc(doc(db, "sessions", activeSession.id), { isOpen: false } as any);
+                } catch (_) {
+                    // ignorer feil
+                }
+                setActiveSession(null);
+            }
+
+            // Gjenåpne eksisterende økt med samme kode
+            const nowTs = Timestamp.now();
+            try {
+                await updateDoc(doc(db, "sessions", foundDoc.id), { isOpen: true, openedAt: nowTs } as any);
+            } catch (_) {
+                // ignorer feil – fortsatt sett lokalt
+            }
+
+            const existing: SessionDoc = {
+                id: foundDoc.id,
+                timeId: String(data.timeId ?? item.timeId),
+                name: String(data.name ?? item.name),
+                category: String(data.category ?? ""),
+                term: typeof data.term === "number" ? data.term : Number(data.term) || item.term,
+                code: String(data.code ?? ""),
+                teacherId: String(data.teacherId ?? user.uid),
+                createdAt: (data.createdAt as Timestamp) ?? Timestamp.now(),
+                isOpen: true,
+                openedAt: nowTs,
+            };
+            setActiveSession(existing);
+            setRemainingSeconds(120);
+            return; // Ikke opprett ny
+        }
+
+        // Dersom ingen eksisterende, opprett ny
         await startNewSessionForTime(item.timeId);
     };
 
@@ -441,7 +516,8 @@ function TeacherPage({ user }: TeacherPageProps) {
         const tick = async () => {
             const now = Date.now();
             const elapsed = Math.floor((now - openedMs) / 1000);
-            const left = Math.max(0, 15 - elapsed);
+            // TIME FOR QR CODE IN SECOUNDS
+            const left = Math.max(0, 60 - elapsed);
             setRemainingSeconds(left);
             if (left === 0 && activeSession.isOpen) {
                 // Auto-close once
@@ -505,25 +581,28 @@ function TeacherPage({ user }: TeacherPageProps) {
         }
     };
 
-    // Fjern registrert student fra aktiv økt (etter bekreftelse via toast)
+    // Åpne bekreftelsesmodal for fjerning av registrert student
     const handleRemoveAttendee = (row: AttendanceRow) => {
-        if (!activeSession) return;
-        const label = row.studentName || row.studentEmail || "denne studenten";
-        toast.warning(`Fjerne ${label} fra økten?`, {
-            action: {
-                label: "Bekreft",
-                onClick: async () => {
-                    try {
-                        await deleteDoc(doc(db, "sessions", activeSession.id, "attendance", row.id));
-                        toast.success("Student fjernet fra økten.");
-                    } catch (e) {
-                        console.error(e);
-                        toast.error("Kunne ikke fjerne studenten.");
-                    }
-                },
-            },
-            description: "Trykk bekreft for å fjerne",
-        });
+        setDeleteAttendeeModal({ open: true, attendee: row });
+    };
+
+    const cancelDeleteAttendeeModal = () => {
+        setDeleteAttendeeModal({ open: false, attendee: null });
+    };
+
+    const confirmDeleteAttendeeModal = async () => {
+        if (!activeSession || !deleteAttendeeModal.attendee) return;
+        const row = deleteAttendeeModal.attendee;
+        try {
+            await deleteDoc(doc(db, "sessions", activeSession.id, "attendance", row.id));
+            // onSnapshot oppdaterer listen automatisk
+            toast.success("Student fjernet fra økten.");
+        } catch (e) {
+            console.error(e);
+            toast.error("Kunne ikke fjerne studenten.");
+        } finally {
+            cancelDeleteAttendeeModal();
+        }
     };
 
     if (loading)
@@ -549,7 +628,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                     {user.displayName || user.email}
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button
+                    <button className="btn-hover-lg"
                         type="button"
                         onClick={() => setShowProfile(true)}
                         style={{
@@ -563,7 +642,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                     >
                         Min profil
                     </button>
-                    <button
+                    <button className="btn-hover-lg"
                         onClick={logout}
                         type="button"
                         style={{
@@ -634,7 +713,14 @@ function TeacherPage({ user }: TeacherPageProps) {
                                         }, 0);
                                     }
                                 }}
-                                style={{ width: "100%", padding: "0.6rem 0.75rem", fontSize: "16px", textAlign: "center" }}
+                                style={{
+                                    width: "100%",
+                                    padding: "0.6rem 0.75rem",
+                                    fontSize: "16px",
+                                    textAlign: "center",
+                                    borderRadius: "0.5rem",
+                                    border: "solid 1px"
+                                }}
                             >
                                 <option value="" disabled>
                                     Velg modul
@@ -662,7 +748,14 @@ function TeacherPage({ user }: TeacherPageProps) {
                         }}
                         placeholder={selectedTerm ? "Start å skrive navnet på timen..." : "Velg modul først"}
                         disabled={!selectedTerm}
-                        style={{ width: "100%", padding: "0.6rem 0rem", fontSize: "16px", textAlign: "center", opacity: !selectedTerm ? 0.6 : 1 }}
+                        style={{
+                            width: "100%",
+                            padding: "0.6rem 0rem",
+                            fontSize: "16px",
+                            textAlign: "center",
+                            borderRadius: "0.5rem",
+                            border: "solid 1px",
+                            opacity: !selectedTerm ? 0.6 : 1 }}
                     />
 
                     {/* Dropdown-forslag under input */}
@@ -729,7 +822,13 @@ function TeacherPage({ user }: TeacherPageProps) {
                                     <button
                                         type="button"
                                         onClick={() => void handleOpenRecent(it)}
-                                        style={{ padding: "0.35rem 0.9rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "white", cursor: "pointer" }}
+                                        style={{
+                                            padding: "0.35rem 0.9rem",
+                                            borderRadius: "999px",
+                                            border: "none",
+                                            background: "#6CE1AB",
+                                            color: "black",
+                                            cursor: "pointer" }}
                                     >
                                         Åpne
                                     </button>
@@ -739,6 +838,12 @@ function TeacherPage({ user }: TeacherPageProps) {
                     </div>
                 </section>
             )}
+        </div>
+            <br />
+            <div className="page-card page-card--session"
+            style={{
+                display: activeSession ? undefined : "none"
+            }}>
 
             {activeSession && (
                 <section
@@ -746,8 +851,6 @@ function TeacherPage({ user }: TeacherPageProps) {
                     style={{
                         marginTop: "2rem",
                         padding: "1rem",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "0.75rem",
                         background: "#f9fafb",
                     }}
                 >
@@ -779,6 +882,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                             <QRCodeCanvas
                                 value={activeSession.code}
                                 size={160}
+                                bgColor="#f9fafb"
                                 includeMargin={true}
                             />
                             <div
@@ -1087,6 +1191,76 @@ function TeacherPage({ user }: TeacherPageProps) {
                 </section>
             )}
         </div>
+        {/* Modal: Bekreft fjerning av registrert student */}
+        {deleteAttendeeModal.open && deleteAttendeeModal.attendee && (
+            <div
+                role="dialog"
+                aria-modal="true"
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    backgroundColor: "rgba(0,0,0,0.35)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "1rem",
+                    zIndex: 1000,
+                }}
+            >
+                <div
+                    className="page-card"
+                    style={{
+                        maxWidth: 520,
+                        width: "100%",
+                        background: "#ffffff",
+                        textAlign: "center",
+                    }}
+                >
+                    <h3 style={{ marginTop: 0 }}>Fjerne student?</h3>
+                    <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                        {(() => {
+                            const a = deleteAttendeeModal.attendee!;
+                            const who = a.studentName || a.studentEmail || "denne studenten";
+                            return `Du er i ferd med å fjerne ${who} fra denne økten.`;
+                        })()}
+                    </p>
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            justifyContent: "center",
+                            marginTop: "0.75rem",
+                        }}
+                    >
+                        <button
+                            className={"button"}
+                            type="button"
+                            onClick={cancelDeleteAttendeeModal}
+                            style={{
+                                background: "#ef4444",
+                                color: "#ffffff",
+                            }}
+                        >
+                            Avbryt
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void confirmDeleteAttendeeModal()}
+                            style={{
+                                padding: "0.45rem 0.9rem",
+                                borderRadius: "999px",
+                                border: "1px solid #d1d5db",
+                                background: "#ffffff",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Fjern student
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {showProfile && (
             <ProfileModal
                 uid={user.uid}
