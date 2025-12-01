@@ -3905,7 +3905,7 @@ const TermSetup: React.FC = () => {
                         style={{
                             backgroundColor: "#ef4444",
                             borderColor: "#ef4444",
-                            color: "black",
+                            color: "white",
                             fontSize: "0.9rem",
                         }}
                     >
