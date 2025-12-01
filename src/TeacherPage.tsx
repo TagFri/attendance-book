@@ -14,10 +14,13 @@ import {
     setDoc,
     query,
     where,
+    orderBy,
+    limit,
 } from "firebase/firestore";
 import { QRCodeCanvas } from "qrcode.react";
 import LoadingSpinner from "./LoadingSpinner";
-import { TERM_OPTIONS, termLabel } from "./termConfig";
+import { useTermOptions, labelFromTerm } from "./terms";
+import ProfileModal from "./ProfileModal";
 
 type TeacherPageProps = {
     user: AppUser;
@@ -39,6 +42,8 @@ type SessionDoc = {
     code: string;
     teacherId: string;
     createdAt: Timestamp;
+    isOpen?: boolean;
+    openedAt?: Timestamp;
 };
 
 type AttendanceRow = {
@@ -52,12 +57,21 @@ type StudentUser = {
     id: string;
     name: string | null;
     email: string;
+    phone?: string | null;
     term?: number | null;
+};
+
+type RecentTime = {
+    timeId: string;
+    name: string;
+    category: string;
+    term: number;
+    lastAt?: Timestamp;
 };
 
 function TeacherPage({ user }: TeacherPageProps) {
     const [times, setTimes] = useState<TimeDoc[]>([]);
-    const [selectedTerm, setSelectedTerm] = useState<number>(user.term ?? 11);
+    const [selectedTerm, setSelectedTerm] = useState<number | null>(null);
     const [allowedTerms, setAllowedTerms] = useState<number[] | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeSession, setActiveSession] = useState<SessionDoc | null>(null);
@@ -70,18 +84,20 @@ function TeacherPage({ user }: TeacherPageProps) {
     const [studentSearch, setStudentSearch] = useState("");
     const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
 
+    // Session countdown (120s) state
+    const [remainingSeconds, setRemainingSeconds] = useState<number>(120);
+
+    // Nylig registrerte timer (siste 4 timer)
+    const [recentTimes, setRecentTimes] = useState<RecentTime[]>([]);
+    const [recentLoading, setRecentLoading] = useState<boolean>(false);
+
     const sessionRef = useRef<HTMLDivElement | null>(null);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
-    const autoFocusOnceRef = useRef(false);
-    const termSelectRef = useRef<HTMLSelectElement | null>(null);
-    const autoOpenTermOnceRef = useRef(false);
 
 
-    const getTermLabel = (term: number | null | undefined) => {
-        if (term == null) return "";
-        const opt = TERM_OPTIONS.find((o) => o.value === term);
-        return opt ? opt.label : term.toString();
-    };
+    const { options: termOptions } = useTermOptions();
+    const { logout } = useAuth();
+    const [showProfile, setShowProfile] = useState(false);
 
     // Hent alle timer
     useEffect(() => {
@@ -116,15 +132,6 @@ function TeacherPage({ user }: TeacherPageProps) {
                           .filter((v) => !Number.isNaN(v))
                     : [];
                 setAllowedTerms(terms);
-
-                // Sett valgt termin basert på tillatte terminer
-                if (terms.length > 0) {
-                    if (user.term && terms.includes(user.term)) {
-                        setSelectedTerm(user.term);
-                    } else {
-                        setSelectedTerm(terms[0]);
-                    }
-                }
             } catch (e) {
                 console.warn("Kunne ikke hente allowedTerms for lærer:", e);
                 setAllowedTerms([]);
@@ -136,108 +143,50 @@ function TeacherPage({ user }: TeacherPageProps) {
 
     // Beregn hvilke term-alternativer som er tilgjengelige (brukes for auto-fokus-logikk)
     const allowedTermOptions = useMemo(() => {
-        if (allowedTerms === null) return TERM_OPTIONS; // ukjent enda
+        if (allowedTerms === null) return termOptions; // ukjent enda
         const set = new Set(allowedTerms ?? []);
-        return TERM_OPTIONS.filter((o) => set.has(o.value));
-    }, [allowedTerms]);
+        return termOptions.filter((o) => set.has(o.value));
+    }, [allowedTerms, termOptions]);
 
-    // Auto-fokus på time-input når det kun finnes én termin (statisk visning)
-    useEffect(() => {
-        if (autoFocusOnceRef.current) return;
-        if (allowedTerms === null) return; // avvent til vi vet
-        if (allowedTermOptions.length === 1) {
-            autoFocusOnceRef.current = true;
-            // liten delay for å sikre at input er mountet og klar (mobil)
-            setTimeout(() => {
-                searchInputRef.current?.focus();
-            }, 0);
-        }
-    }, [allowedTerms, allowedTermOptions.length]);
+    // Fjernet auto-åpning/auto-fokus på modulvalg for å kreve eksplisitt valg av modul
 
-    // Auto-åpne termin-dropdown når lærer logger inn og har flere valg
-    useEffect(() => {
-        if (autoOpenTermOnceRef.current) return;
-        if (allowedTerms === null) return; // vent til vi vet
-        if (allowedTermOptions.length > 1) {
-            autoOpenTermOnceRef.current = true;
-            setTimeout(() => {
-                const sel = termSelectRef.current;
-                if (!sel) return;
-                // Forsøk moderne API hvis tilgjengelig
-                // @ts-ignore
-                if (typeof sel.showPicker === "function") {
-                    // @ts-ignore
-                    sel.showPicker();
-                } else {
-                    sel.focus();
-                    try {
-                        sel.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-                    } catch (e) {
-                        // fallback: klikk
-                        sel.click();
-                    }
-                }
-            }, 50);
-        }
-    }, [allowedTerms, allowedTermOptions.length]);
-
-    // Hent studenter (for manuell registrering) iht. Plan B-regler.
-    // Lærer kan lese studenter hvis student.term er i lærerens allowedTerms
-    // eller når student.term er null. Derfor filtrerer vi i spørringen.
+    // Hent studenter (for manuell registrering) for valgt termin.
     useEffect(() => {
         const loadStudents = async () => {
-            if (allowedTerms === null) return; // vent til vi vet
+            if (allowedTerms === null || !selectedTerm) return;
 
             setStudentsLoading(true);
             try {
                 const usersCol = collection(db, "users");
-                const snaps: Array<Awaited<ReturnType<typeof getDocs>>> = [];
-
-                const terms = (Array.isArray(allowedTerms)
-                    ? allowedTerms.filter((v) => typeof v === "number")
-                    : []) as number[];
-
-                if (terms.length > 0) {
-                    for (let i = 0; i < terms.length; i += 10) {
-                        const batch = terms.slice(i, i + 10);
-                        const qUsers = query(
-                            usersCol,
-                            where("role", "==", "student"),
-                            where("term", "in", batch)
-                        );
-                        const snap = await getDocs(qUsers);
-                        snaps.push(snap);
-                    }
-                }
-
-                // Også: studenter uten term
-                const qNull = query(
+                // Kun studenter i valgt termin
+                const qUsers = query(
                     usersCol,
                     where("role", "==", "student"),
-                    where("term", "==", null)
+                    where("term", "==", selectedTerm)
                 );
-                const snapNull = await getDocs(qNull);
-                snaps.push(snapNull);
+                const snap = await getDocs(qUsers);
 
-                const seen = new Set<string>();
-                const list: StudentUser[] = [];
-                for (const s of snaps) {
-                    s.docs.forEach((d) => {
-                        if (seen.has(d.id)) return;
-                        seen.add(d.id);
-                        const data = d.data() as any;
-                        list.push({
-                            id: d.id,
-                            name:
-                                (data.name as string | undefined) ||
-                                (data.displayName as string | undefined) ||
-                                null,
-                            email: data.email as string,
-                            term: data.term ?? null,
-                        });
-                    });
-                }
-
+                const list: StudentUser[] = snap.docs.map((d) => {
+                    const data = d.data() as any;
+                    const displayName =
+                        (data?.name && String(data.name)) ||
+                        (data?.displayName && String(data.displayName)) ||
+                        null;
+                    return {
+                        id: d.id,
+                        name: displayName,
+                        email: String(data?.email ?? ""),
+                        phone: data?.phone ? String(data.phone) : null,
+                        term: typeof data?.term === "number" ? data.term : null,
+                    } as StudentUser;
+                });
+                // Sorter alfabetisk på navn, deretter e-post
+                list.sort((a, b) => {
+                    const an = (a.name ?? "").toLocaleLowerCase();
+                    const bn = (b.name ?? "").toLocaleLowerCase();
+                    if (an !== bn) return an.localeCompare(bn, "nb-NO");
+                    return a.email.localeCompare(b.email, "nb-NO");
+                });
                 setStudents(list);
             } catch (err) {
                 console.error("Feil ved lasting av studenter:", err);
@@ -247,7 +196,73 @@ function TeacherPage({ user }: TeacherPageProps) {
             }
         };
         loadStudents();
-    }, [allowedTerms]);
+    }, [allowedTerms, selectedTerm]);
+
+    // Hent nylig registrerte timer (siste 4 timer) for denne læreren
+    useEffect(() => {
+        void loadRecentSessions();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user.uid]);
+
+    const loadRecentSessions = async () => {
+        try {
+            setRecentLoading(true);
+            const cutoffMs = Date.now() - 4 * 60 * 60 * 1000; // 4 timer
+            const cutoff = Timestamp.fromMillis(cutoffMs);
+            const sessionsCol = collection(db, "sessions");
+            let docsList: any[] = [];
+            try {
+                const q1 = query(
+                    sessionsCol,
+                    where("teacherId", "==", user.uid),
+                    where("createdAt", ">=", cutoff),
+                    orderBy("createdAt", "desc"),
+                    limit(50)
+                );
+                const snap = await getDocs(q1);
+                docsList = snap.docs;
+            } catch (err) {
+                // Fallback uten indeks: hent alle for lærer og filtrer lokalt
+                const q2 = query(sessionsCol, where("teacherId", "==", user.uid));
+                const snap2 = await getDocs(q2);
+                docsList = snap2.docs
+                    .filter((d) => {
+                        const dt = (d.data() as any)?.createdAt as Timestamp | undefined;
+                        return dt && dt.toMillis() >= cutoffMs;
+                    })
+                    .sort((a, b) => {
+                        const ta = ((a.data() as any)?.createdAt as Timestamp | undefined)?.toMillis?.() ?? 0;
+                        const tb = ((b.data() as any)?.createdAt as Timestamp | undefined)?.toMillis?.() ?? 0;
+                        return tb - ta;
+                    })
+                    .slice(0, 50);
+            }
+
+            // Dedupliser per timeId (behold nyeste)
+            const seen = new Set<string>();
+            const result: RecentTime[] = [];
+            for (const d of docsList) {
+                const data = d.data() as any;
+                const tid = String(data?.timeId ?? "");
+                if (!tid || seen.has(tid)) continue;
+                seen.add(tid);
+                result.push({
+                    timeId: tid,
+                    name: String(data?.name ?? "Ukjent time"),
+                    category: String(data?.category ?? ""),
+                    term: typeof data?.term === "number" ? data.term : (Number(data?.term) || 0),
+                    lastAt: data?.createdAt as Timestamp | undefined,
+                });
+                if (result.length >= 10) break; // vis maks 10 forskjellige timer
+            }
+            setRecentTimes(result);
+        } catch (e) {
+            console.warn("Kunne ikke hente nylige timer:", e);
+            setRecentTimes([]);
+        } finally {
+            setRecentLoading(false);
+        }
+    };
 
     // Lytt på attendance for aktiv session
     useEffect(() => {
@@ -279,16 +294,6 @@ function TeacherPage({ user }: TeacherPageProps) {
         return () => unsub();
     }, [activeSession?.id]);
 
-    // Scroll til økt-kort når vi får ny aktiv session
-    useEffect(() => {
-        if (activeSession && sessionRef.current) {
-            sessionRef.current.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-            });
-        }
-    }, [activeSession]);
-
     const timesForTerm = useMemo(
         () => times.filter((t) => t.term === selectedTerm),
         [times, selectedTerm]
@@ -304,17 +309,20 @@ function TeacherPage({ user }: TeacherPageProps) {
             );
     }, [timesForTerm, searchTerm]);
 
-    // Filtrer studenter for manuell registrering (samme termin som økten hvis mulig)
+    // Filtrer studenter for manuell registrering – kun samme termin som aktiv økt
     const filteredStudents = useMemo(() => {
         const q = studentSearch.trim().toLowerCase();
         if (!q || !activeSession) return [];
         return students
             .filter((s) => {
-                // filtrer helst til samme termin, men ta med de uten term satt
-                if (s.term && s.term !== activeSession.term) return false;
+                // strengt kun samme termin som aktiv økt
+                if (s.term !== activeSession.term) return false;
                 const name = (s.name ?? "").toLowerCase();
                 const email = s.email.toLowerCase();
-                return name.includes(q) || email.includes(q);
+                const phone = (s.phone ?? "").toLowerCase();
+                return (
+                    name.includes(q) || email.includes(q) || phone.includes(q)
+                );
             })
             .slice(0, 10); // vis maks 10 forslag
     }, [students, studentSearch, activeSession]);
@@ -334,6 +342,7 @@ function TeacherPage({ user }: TeacherPageProps) {
         const code = String(n);
 
         const sessionsCol = collection(db, "sessions");
+        const nowTs = Timestamp.now();
         const docRef = await addDoc(sessionsCol, {
             timeId: time.id,
             name: time.name,
@@ -343,8 +352,9 @@ function TeacherPage({ user }: TeacherPageProps) {
             teacherId: user.uid,
             teacherName: user.displayName,
             teacherEmail: user.email,
-            createdAt: Timestamp.now(),
+            createdAt: nowTs,
             isOpen: true,
+            openedAt: nowTs,
         });
 
         const newSession: SessionDoc = {
@@ -355,9 +365,13 @@ function TeacherPage({ user }: TeacherPageProps) {
             term: time.term,
             code,
             teacherId: user.uid,
-            createdAt: Timestamp.now(),
+            createdAt: nowTs,
+            isOpen: true,
+            openedAt: nowTs,
         };
         setActiveSession(newSession);
+        // Oppdater nylig-listen i bakgrunnen
+        void loadRecentSessions();
     };
 
     const handleSuggestionClick = async (time: TimeDoc) => {
@@ -370,12 +384,84 @@ function TeacherPage({ user }: TeacherPageProps) {
         }
     };
 
+    const handleOpenRecent = async (item: RecentTime) => {
+        // Sørg for at valgt termin matcher timens termin (for konsistent filtrering senere)
+        setSelectedTerm(item.term);
+        setSearchTerm(item.name);
+        setShowSuggestions(false);
+        await startNewSessionForTime(item.timeId);
+    };
+
     const handleCloseSession = async () => {
         if (!activeSession) return;
         const ref = doc(db, "sessions", activeSession.id);
-        await updateDoc(ref, { isOpen: false });
-        setActiveSession(null);
-        setAttendees([]);
+        const willOpen = !activeSession.isOpen;
+        if (willOpen) {
+            const nowTs = Timestamp.now();
+            await updateDoc(ref, { isOpen: true, openedAt: nowTs } as any);
+            setActiveSession({ ...activeSession, isOpen: true, openedAt: nowTs });
+            setRemainingSeconds(120);
+        } else {
+            await updateDoc(ref, { isOpen: false } as any);
+            setActiveSession({ ...activeSession, isOpen: false });
+        }
+    };
+
+    // Listen to active session document for isOpen/openedAt changes
+    useEffect(() => {
+        if (!activeSession) return;
+        const sref = doc(db, "sessions", activeSession.id);
+        const unsub = onSnapshot(sref, (snap) => {
+            if (!snap.exists()) return;
+            const data = snap.data() as any;
+            setActiveSession((prev) =>
+                prev && prev.id === snap.id
+                    ? {
+                          ...prev,
+                          isOpen: data?.isOpen ?? prev.isOpen,
+                          openedAt: data?.openedAt ?? prev.openedAt,
+                      }
+                    : prev
+            );
+        });
+        return () => unsub();
+    }, [activeSession?.id]);
+
+    // Countdown timer effect
+    useEffect(() => {
+        if (!activeSession || !activeSession.isOpen || !activeSession.openedAt) {
+            setRemainingSeconds(0);
+            return;
+        }
+        const openedMs = activeSession.openedAt.toMillis();
+        const tick = async () => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - openedMs) / 1000);
+            const left = Math.max(0, 15 - elapsed);
+            setRemainingSeconds(left);
+            if (left === 0 && activeSession.isOpen) {
+                // Auto-close once
+                try {
+                    await updateDoc(doc(db, "sessions", activeSession.id), { isOpen: false } as any);
+                    setActiveSession({ ...activeSession, isOpen: false });
+                } catch (e) {
+                    // ignore errors; will try again on next user action
+                }
+            }
+        };
+        tick();
+        const iv = setInterval(tick, 1000);
+        return () => clearInterval(iv);
+    }, [activeSession?.id, activeSession?.isOpen, activeSession?.openedAt]);
+
+    const formatSeconds = (s: number) => {
+        const mm = Math.floor(s / 60)
+            .toString()
+            .padStart(2, "0");
+        const ss = Math.floor(s % 60)
+            .toString()
+            .padStart(2, "0");
+        return `${mm}:${ss}`;
     };
 
     // Legg til student manuelt i aktiv økt
@@ -423,7 +509,52 @@ function TeacherPage({ user }: TeacherPageProps) {
         );
 
     return (
+        <>
         <div className="page-card page-card--teacher">
+            {/* Topp: navn + min profil + logg ut */}
+            <div
+                style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.75rem",
+                }}
+            >
+                <div style={{ fontWeight: 600 }}>
+                    {user.displayName || user.email}
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                        type="button"
+                        onClick={() => setShowProfile(true)}
+                        style={{
+                            padding: "0.35rem 0.9rem",
+                            borderRadius: "999px",
+                            border: "1px solid #d1d5db",
+                            background: "#ffffff",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                        }}
+                    >
+                        Min profil
+                    </button>
+                    <button
+                        onClick={logout}
+                        type="button"
+                        style={{
+                            padding: "0.35rem 0.9rem",
+                            borderRadius: "999px",
+                            border: "1px solid #d1d5db",
+                            background: "#ffffff",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                        }}
+                    >
+                        Logg ut
+                    </button>
+                </div>
+            </div>
+
             <h2 style={{ textAlign: "center", marginBottom: "2rem" }}>
                 Registrer oppmøte
             </h2>
@@ -438,15 +569,15 @@ function TeacherPage({ user }: TeacherPageProps) {
                                 ? new Set(allowedTerms ?? [])
                                 : null; // null = ikke lastet enda → vis alle midlertidig
                         const options = allowedSet
-                            ? TERM_OPTIONS.filter((o) => allowedSet.has(o.value))
-                            : TERM_OPTIONS;
+                            ? termOptions.filter((o) => allowedSet.has(o.value))
+                            : termOptions;
 
                         if (options.length === 0) {
                             return (
                                 <div
                                     style={{
                                         width: "100%",
-                                        padding: "0.6rem 0.75rem",
+                                        padding: "0.6rem 0",
                                         fontSize: "16px",
                                         border: "1px solid #e5e7eb",
                                         borderRadius: "0.5rem",
@@ -460,44 +591,29 @@ function TeacherPage({ user }: TeacherPageProps) {
                             );
                         }
 
-                        if (options.length <= 1) {
-                            const only = options[0] ?? TERM_OPTIONS.find((o) => o.value === selectedTerm);
-                            // Vis statisk tekst dersom bare én termin er tillatt
-                            return (
-                                <div
-                                    style={{
-                                        width: "100%",
-                                        padding: "0.6rem 0.75rem",
-                                        fontSize: "16px",
-                                        border: "1px solid #e5e7eb",
-                                        borderRadius: "0.5rem",
-                                        background: "#f9fafb",
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    {only ? only.label : termLabel(selectedTerm)}
-                                </div>
-                            );
-                        }
-
                         return (
                             <select
-                                ref={termSelectRef}
-                                value={selectedTerm}
+                                value={selectedTerm ?? ""}
                                 onChange={(e) => {
-                                    const val = parseInt(e.target.value, 10);
+                                    const raw = e.target.value;
+                                    const val = raw === "" ? null : parseInt(raw, 10);
                                     setSelectedTerm(val);
                                     setSearchTerm("");
                                     setShowSuggestions(false);
                                     setActiveSession(null);
                                     setAttendees([]);
                                     // Etter valg av termin: fokuser time-input for rask skriving (mobil/desktop)
-                                    setTimeout(() => {
-                                        searchInputRef.current?.focus();
-                                    }, 0);
+                                    if (val != null) {
+                                        setTimeout(() => {
+                                            searchInputRef.current?.focus();
+                                        }, 0);
+                                    }
                                 }}
                                 style={{ width: "100%", padding: "0.6rem 0.75rem", fontSize: "16px", textAlign: "center" }}
                             >
+                                <option value="" disabled>
+                                    Velg modul
+                                </option>
                                 {options.map((opt) => (
                                     <option key={opt.value} value={opt.value}>
                                         {opt.label}
@@ -517,10 +633,11 @@ function TeacherPage({ user }: TeacherPageProps) {
                             setShowSuggestions(true);
                         }}
                         onFocus={() => {
-                            if (searchTerm.trim().length > 0) setShowSuggestions(true);
+                            if (selectedTerm && searchTerm.trim().length > 0) setShowSuggestions(true);
                         }}
-                        placeholder="Start å skrive navnet på timen..."
-                        style={{ width: "100%", padding: "0.6rem 0rem", fontSize: "16px", textAlign: "center" }}
+                        placeholder={selectedTerm ? "Start å skrive navnet på timen..." : "Velg modul først"}
+                        disabled={!selectedTerm}
+                        style={{ width: "100%", padding: "0.6rem 0rem", fontSize: "16px", textAlign: "center", opacity: !selectedTerm ? 0.6 : 1 }}
                     />
 
                     {/* Dropdown-forslag under input */}
@@ -570,6 +687,34 @@ function TeacherPage({ user }: TeacherPageProps) {
                 </div>
             </section>
 
+            {/* Nylig registrerte timer (kun når ingen aktiv økt) */}
+            {!activeSession && recentTimes.length > 0 && (
+                <section style={{ marginTop: "1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ width: "100%", maxWidth: 520 }}>
+                        <h4 style={{ textAlign: "center", marginTop: 0 }}>Nylig registrerte timer</h4>
+                        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                            {recentTimes.map((it) => (
+                                <li key={it.timeId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid #f3f4f6" }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600 }}>{it.name}</div>
+                                        <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                                            {it.category} · {labelFromTerm(termOptions, it.term)}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleOpenRecent(it)}
+                                        style={{ padding: "0.35rem 0.9rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "white", cursor: "pointer" }}
+                                    >
+                                        Åpne
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </section>
+            )}
+
             {activeSession && (
                 <section
                     ref={sessionRef}
@@ -584,7 +729,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                     {/* Termin / time / gruppe sentrert */}
                     <div style={{ textAlign: "center" }}>
                         <h3 style={{ marginTop: 0, marginBottom: "0.25rem" }}>
-                            {termLabel(activeSession.term)}
+                            {labelFromTerm(termOptions, activeSession.term)}
                         </h3>
                         <p style={{ margin: 0 }}>
                             <strong>Time:</strong> {activeSession.name}
@@ -594,30 +739,57 @@ function TeacherPage({ user }: TeacherPageProps) {
                         </p>
                     </div>
 
-                    {/* QR + kode under */}
-                    <div
-                        style={{
-                            marginTop: "1rem",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                        }}
-                    >
-                        <QRCodeCanvas
-                            value={activeSession.code}
-                            size={160}
-                            includeMargin={true}
-                        />
+                    {/* QR + kode under (blurred if session is closed) */}
+                    <div style={{ marginTop: "1rem", position: "relative" }}>
                         <div
                             style={{
-                                fontSize: "2rem",
-                                fontWeight: "bold",
-                                letterSpacing: "0.3em",
+                                filter: activeSession.isOpen === false ? "blur(6px)" : "none",
+                                pointerEvents: "none",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: "0.5rem",
                             }}
                         >
-                            {activeSession.code}
+                            <QRCodeCanvas
+                                value={activeSession.code}
+                                size={160}
+                                includeMargin={true}
+                            />
+                            <div
+                                style={{
+                                    fontSize: "2rem",
+                                    fontWeight: "bold",
+                                    letterSpacing: "0.3em",
+                                }}
+                            >
+                                {activeSession.code}
+                            </div>
                         </div>
+                        {activeSession.isOpen === false && (
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    inset: 0,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        background: "rgba(255,255,255,0.85)",
+                                        padding: "0.5rem 0.75rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #e5e7eb",
+                                        fontWeight: 600,
+                                        color: "#6b7280",
+                                    }}
+                                >
+                                    Økten er lukket
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Manuell registrering av student */}
@@ -664,15 +836,16 @@ function TeacherPage({ user }: TeacherPageProps) {
                                 placeholder={
                                     studentsLoading
                                         ? "Laster studenter..."
-                                        : "Søk på navn eller e-post"
+                                        : "Søk på navn, e-post eller telefon"
                                 }
                                 disabled={studentsLoading}
                                 style={{
                                     width: "100%",
-                                    padding: "0.4rem",
-                                    fontSize: "14px",
+                                    padding: "0.6rem 0.75rem",
+                                    fontSize: "16px",
                                     borderRadius: "0.5rem",
                                     border: "1px solid #d1d5db",
+                                    textAlign: "center",
                                 }}
                             />
 
@@ -715,7 +888,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                                                     }}
                                                 >
                                                     {s.email}
-                                                    {s.term && ` – termin ${s.term}`}
+                                                    {s.phone ? ` – ${s.phone}` : ""}
                                                 </div>
                                             </li>
                                         ))}
@@ -724,27 +897,33 @@ function TeacherPage({ user }: TeacherPageProps) {
                         </div>
                     </div>
 
-                    {/* Lukk økt-knapp */}
+                    {/* Nedtelling over knappen, begge sentrert */}
                     <div
                         style={{
                             marginTop: "1.2rem",
                             display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
                             justifyContent: "center",
+                            gap: "0.5rem",
                         }}
                     >
+                        <div style={{ fontWeight: 600, color: "#111827" }}>
+                            {formatSeconds(remainingSeconds)}
+                        </div>
                         <button
                             onClick={handleCloseSession}
                             style={{
                                 padding: "0.5rem 1.2rem",
                                 borderRadius: "999px",
                                 border: "none",
-                                background: "#dc2626",
-                                color: "white",
+                                background: activeSession.isOpen === false ? "#6CE1AB" : "#6CE1AB",
+                                color: "black",
                                 fontWeight: 500,
                                 cursor: "pointer",
                             }}
                         >
-                            Lukk økt
+                            {activeSession.isOpen === false ? "Åpne økta" : "Lukk økt"}
                         </button>
                     </div>
 
@@ -835,6 +1014,16 @@ function TeacherPage({ user }: TeacherPageProps) {
                 </section>
             )}
         </div>
+        {showProfile && (
+            <ProfileModal
+                uid={user.uid}
+                role={user.role}
+                email={user.email}
+                displayName={user.displayName}
+                onClose={() => setShowProfile(false)}
+            />
+        )}
+        </>
     );
 }
 

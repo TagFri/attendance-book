@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import type { AppUser } from "./hooks/useAuth";
+import { useAuth } from "./hooks/useAuth";
 import { db } from "./firebase";
 import {
     collection,
@@ -13,7 +14,8 @@ import {
     Timestamp,
 } from "firebase/firestore";
 import QrScanner from "./QrScanner";
-import { termLabel } from "./termConfig";
+import { useTermOptions, labelFromTerm } from "./terms";
+import ProfileModal from "./ProfileModal";
 import LoadingSpinner from "./LoadingSpinner";
 
 
@@ -28,11 +30,29 @@ type CategoryStat = {
     requiredCount: number | null;
 };
 
+// Lokale hjelpe-typer for detaljvisning i modal
+type TimeRow = {
+    id: string;
+    name: string;
+    category: string;
+    term: number;
+    order?: number;
+};
+
+type SessionRow = {
+    id: string;
+    timeId?: string;
+    name?: string;
+    category?: string;
+};
+
 type StatusState = "idle" | "success" | "error";
 
 function StudentPage({ user }: StudentPageProps) {
+    const { logout } = useAuth();
     const [code, setCode] = useState("");
     const [loading, setLoading] = useState(false);
+    const [showProfile, setShowProfile] = useState(false);
 
     const selectedTerm = user.term ?? 11;
 
@@ -40,6 +60,14 @@ function StudentPage({ user }: StudentPageProps) {
     const [statsLoading, setStatsLoading] = useState(false);
     const [statsVersion, setStatsVersion] = useState(0);
     const [scanning, setScanning] = useState(false);
+
+    const { options: termOptions } = useTermOptions();
+
+    // Detaljmodal for gruppe → viser hver time og status (registrert/mangler)
+    const [groupModalOpen, setGroupModalOpen] = useState(false);
+    const [groupModalCategory, setGroupModalCategory] = useState<string | null>(null);
+    const [allTimes, setAllTimes] = useState<TimeRow[]>([]);
+    const [attendedByTimeId, setAttendedByTimeId] = useState<Record<string, boolean>>({});
 
     // Suksess / feil-visning
     const [status, setStatus] = useState<StatusState>("idle");
@@ -155,22 +183,28 @@ function StudentPage({ user }: StudentPageProps) {
                 const sessCol = collection(db, "sessions");
                 const sessQ = query(sessCol, where("term", "==", selectedTerm));
                 const sessSnap = await getDocs(sessQ);
-                const sessions = sessSnap.docs.map((d) => {
+                const sessions: SessionRow[] = sessSnap.docs.map((d) => {
                     const data = d.data() as any;
                     return {
                         id: d.id,
-                        category: data.category as string | undefined,
-                    };
+                        timeId: typeof data?.timeId === "string" ? data.timeId : undefined,
+                        name: typeof data?.name === "string" ? data.name : undefined,
+                        category: typeof data?.category === "string" ? data.category : undefined,
+                    } as SessionRow;
                 });
 
                 const timesCol = collection(db, "times");
                 const timesQ = query(timesCol, where("term", "==", selectedTerm));
                 const timesSnap = await getDocs(timesQ);
-                const times = timesSnap.docs.map((d) => {
+                const times: TimeRow[] = timesSnap.docs.map((d) => {
                     const data = d.data() as any;
                     return {
-                        category: data.category as string | undefined,
-                    };
+                        id: d.id,
+                        name: data.name as string,
+                        category: data.category as string,
+                        term: data.term as number,
+                        order: typeof data?.order === "number" ? data.order : undefined,
+                    } as TimeRow;
                 });
 
                 const timesCountMap = new Map<string, number>();
@@ -183,6 +217,7 @@ function StudentPage({ user }: StudentPageProps) {
                 }
 
                 const attendedMap = new Map<string, number>();
+                const attendedByTime: Record<string, boolean> = {};
                 for (const s of sessions) {
                     if (!s.category) continue;
                     const attRef = doc(
@@ -198,6 +233,17 @@ function StudentPage({ user }: StudentPageProps) {
                             s.category,
                             (attendedMap.get(s.category) ?? 0) + 1
                         );
+
+                        // Marker spesifikk time som oppmøtt hvis mulig
+                        if (s.timeId) {
+                            attendedByTime[s.timeId] = true;
+                        } else if (s.name && s.category) {
+                            // Fallback når session mangler timeId: prøv å matche på navn og kategori
+                            const match = times.find(
+                                (t) => t.category === s.category && t.name === s.name
+                            );
+                            if (match) attendedByTime[match.id] = true;
+                        }
                     }
                 }
 
@@ -229,9 +275,13 @@ function StudentPage({ user }: StudentPageProps) {
                 );
 
                 setStats(statsArr);
+                setAllTimes(times);
+                setAttendedByTimeId(attendedByTime);
             } catch (err) {
                 console.error(err);
                 setStats([]);
+                setAllTimes([]);
+                setAttendedByTimeId({});
             } finally {
                 setStatsLoading(false);
             }
@@ -239,6 +289,37 @@ function StudentPage({ user }: StudentPageProps) {
 
         loadStats();
     }, [selectedTerm, user.uid, statsVersion]);
+
+    // Hjelper for sortering av tider i modal: først order, så ledetall i navn, så alfa
+    const leadingNumber = (name: string): number => {
+        const m = name.match(/^\s*(\d+)/);
+        return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
+    };
+
+    const modalTimes = useMemo(() => {
+        if (!groupModalOpen || !groupModalCategory) return [] as (TimeRow & { attended: boolean })[];
+        const list = allTimes
+            .filter((t) => t.category === groupModalCategory)
+            .map((t) => ({ ...t, attended: !!attendedByTimeId[t.id] }));
+        list.sort((a, b) => {
+            const ao = (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER);
+            if (ao !== 0) return ao;
+            const na = leadingNumber(a.name);
+            const nb = leadingNumber(b.name);
+            if (na !== nb) return na - nb;
+            return a.name.localeCompare(b.name, "nb-NO", { sensitivity: "base" });
+        });
+        return list;
+    }, [groupModalOpen, groupModalCategory, allTimes, attendedByTimeId]);
+
+    const openGroupModal = (category: string) => {
+        setGroupModalCategory(category);
+        setGroupModalOpen(true);
+    };
+    const closeGroupModal = () => {
+        setGroupModalOpen(false);
+        setGroupModalCategory(null);
+    };
 
     // Manuell kodeinput → auto når 6 siffer
     const handleCodeChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
@@ -264,7 +345,51 @@ function StudentPage({ user }: StudentPageProps) {
     }, [status]);
 
     return (
+        <>
         <div className="page-card page-card--student">
+            {/* Topp: navn + min profil + logg ut */}
+            <div
+                style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.75rem",
+                }}
+            >
+                <div style={{ fontWeight: 600 }}>
+                    {user.displayName || user.email}
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                        type="button"
+                        onClick={() => setShowProfile(true)}
+                        style={{
+                            padding: "0.35rem 0.9rem",
+                            borderRadius: "999px",
+                            border: "1px solid #d1d5db",
+                            background: "#ffffff",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                        }}
+                    >
+                        Min profil
+                    </button>
+                    <button
+                        onClick={logout}
+                        type="button"
+                        style={{
+                            padding: "0.35rem 0.9rem",
+                            borderRadius: "999px",
+                            border: "1px solid #d1d5db",
+                            background: "#ffffff",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                        }}
+                    >
+                        Logg ut
+                    </button>
+                </div>
+            </div>
             <h2 style={{ textAlign: "center", marginBottom: "1rem" }}>
                 Registrer oppmøte
             </h2>
@@ -410,21 +535,13 @@ function StudentPage({ user }: StudentPageProps) {
                         />
 
                         {loading && <LoadingSpinner />}
-                        <p
-                            style={{
-                                fontSize: "0.8rem",
-                                color: "#6b7280",
-                                marginTop: "0.4rem",
-                            }}
-                        >
-                            Koden registreres automatisk når du har skrevet inn 6 siffer.
-                        </p>
+                        <br/>
 
                         <button
                             type="button"
                             onClick={() => setScanning((s) => !s)}
                             style={{
-                                marginTop: "0.5rem",
+                                marginTop: "1rem",
                                 padding: "0.4rem 0.9rem",
                                 borderRadius: "999px",
                                 border: "1px solid #d1d5db",
@@ -464,7 +581,7 @@ function StudentPage({ user }: StudentPageProps) {
             <hr style={{ marginTop: "2rem", marginBottom: "1rem" }} />
 
             <section>
-                <h3 style={{textAlign: "center"}}>{termLabel(selectedTerm)}</h3>
+                <h3 style={{textAlign: "center"}}>{labelFromTerm(termOptions, selectedTerm)}</h3>
 
                 {statsLoading ? (
                     <LoadingSpinner />
@@ -512,14 +629,21 @@ function StudentPage({ user }: StudentPageProps) {
                                 s.attendedCount >= s.requiredCount;
 
                             const baseCellStyle: React.CSSProperties = {
-                                padding: "0.3rem",
+                                padding: "0.5rem",
                                 borderBottom: "1px solid #f3f4f6",
                                 background: metRequirement ? "#dcfce7" : "transparent",
                             };
 
                             return (
-                                <tr key={s.category}>
-                                    <td style={baseCellStyle}>{s.category}</td>
+                                <tr
+                                    key={s.category}
+                                    onClick={() => openGroupModal(s.category)}
+                                    title="Klikk for å se detaljer"
+                                    style={{ cursor: "pointer" }}
+                                >
+                                    <td style={baseCellStyle}>
+                                        {s.category}
+                                    </td>
                                     <td style={baseCellStyle}>
                                         {s.totalSessions > 0
                                             ? `${s.attendedCount}/${s.totalSessions}`
@@ -535,7 +659,116 @@ function StudentPage({ user }: StudentPageProps) {
                     </table>
                 )}
             </section>
+
+            {/* Modal: detaljer for valgt gruppe */}
+            {groupModalOpen && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(15,23,42,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                    }}
+                    onClick={closeGroupModal}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: "100%",
+                            maxWidth: "420px",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "1rem",
+                            padding: "1rem 1.25rem",
+                            boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                        }}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h3 style={{ margin: 0 }}>
+                                {groupModalCategory ? `Oppmøte i ${groupModalCategory}` : "Oppmøte"}
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={closeGroupModal}
+                                style={{
+                                    border: "none",
+                                    background: "transparent",
+                                    fontSize: "1.2rem",
+                                    cursor: "pointer",
+                                }}
+                                aria-label="Lukk"
+                                title="Lukk"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {modalTimes.length === 0 ? (
+                            <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
+                                Ingen timer er definert i denne gruppen enda.
+                            </p>
+                        ) : (
+                            <ul style={{ listStyle: "none", padding: 0, marginTop: "0.75rem" }}>
+                                {modalTimes.map((t) => (
+                                    <li
+                                        key={t.id}
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            padding: "0.35rem 0",
+                                            borderBottom: "1px solid #f3f4f6",
+                                        }}
+                                    >
+                                        <span>{t.name}</span>
+                                        <span
+                                            style={{
+                                                display: "inline-block",
+                                                padding: "0.15rem 0.5rem",
+                                                borderRadius: "999px",
+                                                backgroundColor: t.attended ? "#dcfce7" : "#fee2e2",
+                                                color: t.attended ? "#166534" : "#991b1b",
+                                                fontSize: "0.8rem",
+                                            }}
+                                        >
+                                            {t.attended ? "Registrert" : "Mangler"}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
+                            <button
+                                type="button"
+                                onClick={closeGroupModal}
+                                style={{
+                                    padding: "0.35rem 0.8rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    background: "#fff",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Lukk
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
+        {showProfile && (
+            <ProfileModal
+                uid={user.uid}
+                role={user.role}
+                email={user.email}
+                displayName={user.displayName}
+                onClose={() => setShowProfile(false)}
+            />
+        )}
+        </>
     );
 }
 

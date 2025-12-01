@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import LoadingSpinner from "./LoadingSpinner";
 import { useAuth } from "./hooks/useAuth";
 import { auth, db, secondaryAuth } from "./firebase";
-import { signOut } from "firebase/auth";
+// import { signOut } from "firebase/auth";
 import {
     collection,
     getDocs,
@@ -14,9 +14,14 @@ import {
     writeBatch,
     query,
     where,
+    getDoc,
+    serverTimestamp,
+    Timestamp,
 } from "firebase/firestore";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { TERM_OPTIONS, termLabel, termShortLabel } from "./termConfig";
+import { labelFromTerm, shortLabelFromTerm } from "./terms";
+import ProfileModal from "./ProfileModal";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 // ---------- Typer ----------
 
@@ -95,6 +100,38 @@ const UsersAdmin: React.FC = () => {
     >("name");
     const [adminSortDir, setAdminSortDir] = useState<"asc" | "desc">("asc");
 
+    // --- Term options loaded from Firestore (for filters and modals) ---
+    type TermDocOption = { value: number; label: string; order?: number };
+    const [dbTerms, setDbTerms] = useState<TermDocOption[]>([]);
+    const computedTermOptions = useMemo(() => {
+        return dbTerms
+            .slice()
+            .sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value))
+            .map((t) => ({ value: t.value, label: t.label || `Termin ${t.value}` }));
+    }, [dbTerms]);
+    useEffect(() => {
+        const loadTerms = async () => {
+            try {
+                const snap = await getDocs(collection(db, "terms"));
+                const list: TermDocOption[] = snap.docs
+                    .map((d) => {
+                        const data = d.data() as any;
+                        const value = typeof data?.value === "number" ? data.value : undefined;
+                        if (typeof value !== "number") return null;
+                        const label = typeof data?.label === "string" ? data.label : "";
+                        const order = typeof data?.order === "number" ? data.order : undefined;
+                        return { value, label, order } as TermDocOption;
+                    })
+                    .filter(Boolean) as TermDocOption[];
+                list.sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value));
+                setDbTerms(list);
+            } catch (e) {
+                console.warn("Kunne ikke laste terminer fra Firestore for admin-brukerpanel:", e);
+            }
+        };
+        void loadTerms();
+    }, []);
+
     // Modal for lærere (create/edit)
     const [teacherModalMode, setTeacherModalMode] = useState<
         "create" | "edit" | null
@@ -126,6 +163,101 @@ const UsersAdmin: React.FC = () => {
         "student" | "teacher" | "admin"
     >("student");
     const [editStudentTerm, setEditStudentTerm] = useState<number | null>(null);
+    const [approvalTermSel, setApprovalTermSel] = useState<number | null>(null);
+
+    // Godkjenning av bøker per student per termin (cache i minnet)
+    type BookApproval = { approved: boolean; approvedAt?: Timestamp | null };
+    const [bookApprovals, setBookApprovals] = useState<
+        Record<string, Record<number, BookApproval>>
+    >({});
+
+    const getCachedApproval = (uid: string, term: number | null | undefined): BookApproval | undefined => {
+        if (uid && term != null) {
+            return bookApprovals[uid]?.[term];
+        }
+        return undefined;
+    };
+
+    const loadApproval = async (uid: string, term: number | null | undefined) => {
+        if (!uid || term == null) return;
+        // Unngå dobbel lasting
+        if (bookApprovals[uid]?.[term] !== undefined) return;
+        try {
+            const ref = doc(db, "users", uid, "books", String(term));
+            const snap = await getDoc(ref);
+            const data: BookApproval = snap.exists()
+                ? {
+                    approved: Boolean((snap.data() as any).approved),
+                    approvedAt: (snap.data() as any).approvedAt ?? null,
+                }
+                : { approved: false, approvedAt: null };
+
+            setBookApprovals((prev) => ({
+                ...prev,
+                [uid]: {
+                    ...(prev[uid] ?? {}),
+                    [term]: data,
+                },
+            }));
+        } catch (e) {
+            console.error("Kunne ikke laste godkjenning for bok:", e);
+        }
+    };
+
+    const approveBook = async (uid: string, term: number | null | undefined) => {
+        if (!uid || term == null) return;
+        try {
+            const ref = doc(db, "users", uid, "books", String(term));
+            await setDoc(ref, { approved: true, approvedAt: serverTimestamp() }, { merge: true });
+            // Optimistisk oppdatering
+            setBookApprovals((prev) => ({
+                ...prev,
+                [uid]: {
+                    ...(prev[uid] ?? {}),
+                    [term]: { approved: true, approvedAt: Timestamp.now() },
+                },
+            }));
+        } catch (e) {
+            console.error("Feil ved godkjenning av bok:", e);
+            alert("Kunne ikke godkjenne bok.");
+        }
+    };
+
+    const unapproveBook = async (uid: string, term: number | null | undefined) => {
+        if (!uid || term == null) return;
+        try {
+            const ref = doc(db, "users", uid, "books", String(term));
+            await setDoc(ref, { approved: false, approvedAt: null }, { merge: true });
+            setBookApprovals((prev) => ({
+                ...prev,
+                [uid]: {
+                    ...(prev[uid] ?? {}),
+                    [term]: { approved: false, approvedAt: null },
+                },
+            }));
+        } catch (e) {
+            console.error("Feil ved oppheving av godkjenning:", e);
+            alert("Kunne ikke oppheve godkjenning.");
+        }
+    };
+
+    // Liten hjelpekomponent for å vise status i tabellen
+    const StudentApprovalStatus: React.FC<{ uid: string; term: number }> = ({ uid, term }) => {
+        const approval = getCachedApproval(uid, term);
+        useEffect(() => {
+            if (approval === undefined) void loadApproval(uid, term);
+        }, [uid, term, approval]);
+
+        if (!approval) return <span style={{ color: "#9ca3af" }}>—</span>;
+        if (approval.approved) {
+            const ts = approval.approvedAt as Timestamp | null | undefined;
+            const title = ts ? new Date(ts.toDate()).toLocaleString("nb-NO") : undefined;
+            return (
+                <span title={title} style={{ color: "#16a34a", fontSize: "1rem" }}>✅</span>
+            );
+        }
+        return <span style={{ color: "#9ca3af" }}>—</span>;
+    };
 
     // Modal for admins (create/edit)
     const [adminModalMode, setAdminModalMode] = useState<
@@ -352,6 +484,7 @@ const UsersAdmin: React.FC = () => {
             const uid = cred.user.uid;
 
             const userDoc = {
+                uid,
                 email,
                 displayName: name || email,
                 name: name || email,
@@ -417,6 +550,18 @@ const UsersAdmin: React.FC = () => {
         const docId = teacherModalUser.docId;
 
         try {
+            // If email changed, update in Auth via callable before Firestore
+            if (editTeacherEmail.trim() && editTeacherEmail.trim() !== (teacherModalUser.email || "")) {
+                try {
+                    const functions = getFunctions(undefined, "europe-west1");
+                    const updateAuthEmail = httpsCallable(functions, "adminUpdateUserEmail");
+                    await updateAuthEmail({ uid: docId, newEmail: editTeacherEmail.trim() });
+                } catch (e: any) {
+                    console.error("adminUpdateUserEmail failed", e);
+                    alert("Kunne ikke oppdatere lærerens e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
+                    return;
+                }
+            }
             const ref = doc(db, "users", docId);
             await updateDoc(ref, {
                 displayName: editTeacherName,
@@ -500,6 +645,7 @@ const UsersAdmin: React.FC = () => {
             const uid = cred.user.uid;
 
             const userDoc = {
+                uid,
                 email,
                 displayName: name || email,
                 name: name || email,
@@ -565,6 +711,17 @@ const UsersAdmin: React.FC = () => {
         const docId = studentModalUser.docId;
 
         try {
+            if (editStudentEmail.trim() && editStudentEmail.trim() !== (studentModalUser.email || "")) {
+                try {
+                    const functions = getFunctions(undefined, "europe-west1");
+                    const updateAuthEmail = httpsCallable(functions, "adminUpdateUserEmail");
+                    await updateAuthEmail({ uid: docId, newEmail: editStudentEmail.trim() });
+                } catch (e: any) {
+                    console.error("adminUpdateUserEmail failed", e);
+                    alert("Kunne ikke oppdatere studentens e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
+                    return;
+                }
+            }
             const ref = doc(db, "users", docId);
             await updateDoc(ref, {
                 displayName: editStudentName,
@@ -639,6 +796,7 @@ const UsersAdmin: React.FC = () => {
             const uid = cred.user.uid;
 
             const userDoc = {
+                uid,
                 email,
                 displayName: name || email,
                 name: name || email,
@@ -703,6 +861,17 @@ const UsersAdmin: React.FC = () => {
         const docId = adminModalUser.docId;
 
         try {
+            if (editAdminEmail.trim() && editAdminEmail.trim() !== (adminModalUser.email || "")) {
+                try {
+                    const functions = getFunctions(undefined, "europe-west1");
+                    const updateAuthEmail = httpsCallable(functions, "adminUpdateUserEmail");
+                    await updateAuthEmail({ uid: docId, newEmail: editAdminEmail.trim() });
+                } catch (e: any) {
+                    console.error("adminUpdateUserEmail failed", e);
+                    alert("Kunne ikke oppdatere admin‑e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
+                    return;
+                }
+            }
             const ref = doc(db, "users", docId);
             await updateDoc(ref, {
                 displayName: editAdminName,
@@ -753,35 +922,35 @@ const UsersAdmin: React.FC = () => {
             >
                 <button
                     type="button"
-                    onClick={() => setActiveTab("teachers")}
-                    style={{
-                        flex: 1,
-                        padding: "0.35rem 0.5rem",
-                        borderRadius: "999px",
-                        border: "1px solid #d1d5db",
-                        background: activeTab === "teachers" ? "#b91c1c" : "#ffffff",
-                        color: activeTab === "teachers" ? "#ffffff" : "#111827",
-                        fontSize: "0.85rem",
-                        cursor: "pointer",
-                    }}
-                >
-                    Lærere
-                </button>
-                <button
-                    type="button"
                     onClick={() => setActiveTab("students")}
                     style={{
                         flex: 1,
                         padding: "0.35rem 0.5rem",
                         borderRadius: "999px",
                         border: "1px solid #d1d5db",
-                        background: activeTab === "students" ? "#b91c1c" : "#ffffff",
-                        color: activeTab === "students" ? "#ffffff" : "#111827",
+                        background: activeTab === "students" ? "#6CE1AB" : "#ffffff",
+                        color: activeTab === "students" ? "black" : "#111827",
                         fontSize: "0.85rem",
                         cursor: "pointer",
                     }}
                 >
                     Studenter
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab("teachers")}
+                    style={{
+                        flex: 1,
+                        padding: "0.35rem 0.5rem",
+                        borderRadius: "999px",
+                        border: "1px solid #d1d5db",
+                        background: activeTab === "teachers" ? "#6CE1AB" : "#ffffff",
+                        color: activeTab === "teachers" ? "black" : "#111827",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                    }}
+                >
+                    Lærere
                 </button>
                 <button
                     type="button"
@@ -791,8 +960,8 @@ const UsersAdmin: React.FC = () => {
                         padding: "0.35rem 0.5rem",
                         borderRadius: "999px",
                         border: "1px solid #d1d5db",
-                        background: activeTab === "admins" ? "#b91c1c" : "#ffffff",
-                        color: activeTab === "admins" ? "#ffffff" : "#111827",
+                        background: activeTab === "admins" ? "#6CE1AB" : "#ffffff",
+                        color: activeTab === "admins" ? "black" : "#111827",
                         fontSize: "0.85rem",
                         cursor: "pointer",
                     }}
@@ -850,7 +1019,7 @@ const UsersAdmin: React.FC = () => {
                                             }}
                                         >
                                             <option value="">Alle terminer</option>
-                                            {TERM_OPTIONS.map((opt) => (
+                                            {computedTermOptions.map((opt) => (
                                                 <option key={opt.value} value={opt.value}>
                                                     {opt.label}
                                                 </option>
@@ -1007,7 +1176,7 @@ const UsersAdmin: React.FC = () => {
                                             }}
                                         >
                                             <option value="">Alle terminer</option>
-                                            {TERM_OPTIONS.map((opt) => (
+                                            {computedTermOptions.map((opt) => (
                                                 <option key={opt.value} value={opt.value}>
                                                     {opt.label}
                                                 </option>
@@ -1065,35 +1234,18 @@ const UsersAdmin: React.FC = () => {
                                                 textAlign: "left",
                                                 borderBottom: "1px solid #e5e7eb",
                                                 padding: "0.25rem",
-                                                cursor: "pointer",
-                                            }}
-                                            onClick={() => toggleStudentSort("email")}
-                                        >
-                                            E-post{" "}
-                                            {studentSortKey === "email" &&
-                                                (studentSortDir === "asc" ? "▲" : "▼")}
-                                        </th>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                borderBottom: "1px solid #e5e7eb",
-                                                padding: "0.25rem",
-                                                cursor: "pointer",
-                                            }}
-                                            onClick={() => toggleStudentSort("phone")}
-                                        >
-                                            Mobil{" "}
-                                            {studentSortKey === "phone" &&
-                                                (studentSortDir === "asc" ? "▲" : "▼")}
-                                        </th>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                borderBottom: "1px solid #e5e7eb",
-                                                padding: "0.25rem",
                                             }}
                                         >
                                             Termin
+                                        </th>
+                                        <th
+                                            style={{
+                                                textAlign: "left",
+                                                borderBottom: "1px solid #e5e7eb",
+                                                padding: "0.25rem",
+                                            }}
+                                        >
+                                            Godkjent?
                                         </th>
                                     </tr>
                                     </thead>
@@ -1118,25 +1270,28 @@ const UsersAdmin: React.FC = () => {
                                                     borderBottom: "1px solid #f3f4f6",
                                                 }}
                                             >
-                                                {u.email}
-                                            </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
-                                                {u.phone ?? "—"}
-                                            </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
                                                 {u.term != null && u.term !== undefined
-                                                    ? termShortLabel(u.term)
+                                                    ? shortLabelFromTerm(computedTermOptions, u.term)
                                                     : "Ingen"}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.25rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    // Forhåndslast godkjenning når raden hovres
+                                                    void loadApproval(u.docId, u.term ?? null);
+                                                }}
+                                            >
+                                                {u.term == null ? (
+                                                    "—"
+                                                ) : (
+                                                    <StudentApprovalStatus
+                                                        uid={u.docId}
+                                                        term={u.term}
+                                                    />
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
@@ -1405,7 +1560,7 @@ const UsersAdmin: React.FC = () => {
                                         padding: "0.35rem 0.45rem",
                                     }}
                                 >
-                                    {TERM_OPTIONS.map((opt) => (
+                                    {computedTermOptions.map((opt) => (
                                         <label
                                             key={opt.value}
                                             style={{
@@ -1616,7 +1771,7 @@ const UsersAdmin: React.FC = () => {
                                     }}
                                 >
                                     <option value="">Ingen</option>
-                                    {TERM_OPTIONS.map((opt) => (
+                                    {computedTermOptions.map((opt) => (
                                         <option key={opt.value} value={opt.value}>
                                             {opt.label}
                                         </option>
@@ -1842,6 +1997,247 @@ const UsersAdmin: React.FC = () => {
         </div>
     );
 };
+// ---------- Terminer (CRUD + drag & drop rekkefølge) ----------
+
+const TermsAdmin: React.FC = () => {
+    type TermDoc = { docId: string; value: number; label: string; order?: number };
+    const [terms, setTerms] = useState<TermDoc[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [adding, setAdding] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingLabel, setEditingLabel] = useState<string>("");
+    const [dragIndex, setDragIndex] = useState<number | null>(null);
+    const [orderDirty, setOrderDirty] = useState(false);
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                setLoading(true);
+                const snap = await getDocs(collection(db, "terms"));
+                const list: TermDoc[] = snap.docs
+                    .map((d) => {
+                        const data = d.data() as any;
+                        if (typeof data?.value !== "number") return null;
+                        return {
+                            docId: d.id,
+                            value: data.value,
+                            label: typeof data?.label === "string" ? data.label : "",
+                            order: typeof data?.order === "number" ? data.order : undefined,
+                        } as TermDoc;
+                    })
+                    .filter(Boolean) as TermDoc[];
+                list.sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value));
+                setTerms(list);
+            } finally {
+                setLoading(false);
+            }
+        };
+        void load();
+    }, []);
+
+    const handleAdd = async () => {
+        try {
+            setAdding(true);
+            const maxVal = terms.length > 0 ? Math.max(...terms.map((t) => t.value)) : 0;
+            const maxOrder = terms.length > 0 ? Math.max(...terms.map((t) => t.order ?? t.value)) : 0;
+            const newValue = maxVal + 1;
+            const newOrder = maxOrder + 1;
+            const ref = await addDoc(collection(db, "terms"), {
+                value: newValue,
+                label: "",
+                order: newOrder,
+                createdAt: serverTimestamp(),
+            });
+            const row: TermDoc = { docId: ref.id, value: newValue, label: "", order: newOrder };
+            setTerms((prev) => [...prev, row]);
+            setEditingId(ref.id);
+            setEditingLabel("");
+        } catch (e) {
+            console.error("Kunne ikke legge til termin:", e);
+            alert("Kunne ikke legge til termin.");
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleSaveLabel = async (row: TermDoc) => {
+        const newLabel = editingLabel.trim();
+        if (!newLabel) {
+            setEditingId(null);
+            return;
+        }
+        try {
+            await updateDoc(doc(db, "terms", row.docId), { label: newLabel, updatedAt: serverTimestamp() } as any);
+            setTerms((prev) => prev.map((t) => (t.docId === row.docId ? { ...t, label: newLabel } : t)));
+            setEditingId(null);
+        } catch (e) {
+            console.error("Kunne ikke lagre navn:", e);
+            alert("Kunne ikke lagre navn på termin.");
+        }
+    };
+
+    const handleDelete = async (row: TermDoc) => {
+        const ok = window.confirm(
+            `Slette termin «${row.label || row.value}»? Dette påvirker kun listen over terminer. Tilknyttede data endres ikke automatisk.`
+        );
+        if (!ok) return;
+        try {
+            await deleteDoc(doc(db, "terms", row.docId));
+            setTerms((prev) => prev.filter((t) => t.docId !== row.docId));
+            setOrderDirty(true);
+        } catch (e) {
+            console.error("Kunne ikke slette termin:", e);
+            alert("Kunne ikke slette termin.");
+        }
+    };
+
+    const reorder = (from: number, to: number) => {
+        if (from === to) return;
+        setTerms((prev) => {
+            const arr = prev.slice();
+            const [moved] = arr.splice(from, 1);
+            arr.splice(to, 0, moved);
+            return arr;
+        });
+        setOrderDirty(true);
+    };
+
+    const handleSaveOrder = async () => {
+        try {
+            const batch = writeBatch(db);
+            terms.forEach((t, idx) => {
+                batch.update(doc(db, "terms", t.docId), { order: idx + 1 } as any);
+            });
+            await batch.commit();
+            setOrderDirty(false);
+        } catch (e) {
+            console.error("Kunne ikke lagre rekkefølge:", e);
+            alert("Kunne ikke lagre rekkefølge.");
+        }
+    };
+
+    return (
+        <section>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.75rem" }}>
+                <button
+                    type="button"
+                    onClick={handleAdd}
+                    disabled={adding}
+                    style={{
+                        padding: "0.45rem 0.9rem",
+                        borderRadius: "999px",
+                        border: "none",
+                        backgroundColor: "#dc2626",
+                        color: "#ffffff",
+                        fontSize: "0.9rem",
+                        cursor: adding ? "not-allowed" : "pointer",
+                        whiteSpace: "nowrap",
+                    }}
+                >
+                    {adding ? "Legger til..." : "Legg til termin"}
+                </button>
+                <button
+                    type="button"
+                    onClick={handleSaveOrder}
+                    disabled={!orderDirty}
+                    style={{
+                        padding: "0.45rem 0.9rem",
+                        borderRadius: "999px",
+                        border: "1px solid #d1d5db",
+                        backgroundColor: orderDirty ? "#ffffff" : "#f3f4f6",
+                        color: "#111827",
+                        fontSize: "0.9rem",
+                        cursor: orderDirty ? "pointer" : "not-allowed",
+                        whiteSpace: "nowrap",
+                    }}
+                >
+                    Lagre rekkefølge
+                </button>
+            </div>
+
+            {loading ? (
+                <LoadingSpinner />)
+                : terms.length === 0 ? (
+                    <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>Ingen terminer opprettet ennå.</p>
+                ) : (
+                    <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                        {terms.map((t, idx) => {
+                            const isEditing = editingId === t.docId;
+                            return (
+                                <li
+                                    key={t.docId}
+                                    draggable
+                                    onDragStart={() => setDragIndex(idx)}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={() => {
+                                        if (dragIndex != null) reorder(dragIndex, idx);
+                                        setDragIndex(null);
+                                    }}
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        padding: "0.5rem 0.6rem",
+                                        border: "1px solid #e5e7eb",
+                                        borderRadius: "0.5rem",
+                                        background: "#ffffff",
+                                    }}
+                                >
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flex: 1, minWidth: 0 }}>
+                                        <span style={{ width: 28, textAlign: "center", color: "#6b7280" }}>☰</span>
+                                        <span style={{ width: 36, color: "#6b7280" }}>{idx + 1}</span>
+                                        <span style={{ width: 48, color: "#374151", fontWeight: 600 }}>#{t.value}</span>
+                                        {isEditing ? (
+                                            <input
+                                                value={editingLabel}
+                                                onChange={(e) => setEditingLabel(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') { e.preventDefault(); void handleSaveLabel(t); }
+                                                    if (e.key === 'Escape') { setEditingId(null); }
+                                                }}
+                                                placeholder="Navn på modul"
+                                                style={{ flex: 1, minWidth: 0, padding: "0.35rem 0.5rem", border: "1px solid #d1d5db", borderRadius: "0.5rem" }}
+                                            />
+                                        ) : (
+                                            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {t.label || <span style={{ color: "#9ca3af" }}>(uten navn)</span>}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                                        {isEditing ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleSaveLabel(t)}
+                                                style={{ padding: "0.25rem 0.6rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "#fff", fontSize: "0.8rem", cursor: "pointer" }}
+                                            >
+                                                Lagre
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setEditingId(t.docId); setEditingLabel(t.label); }}
+                                                style={{ padding: "0.25rem 0.6rem", borderRadius: "999px", border: "none", background: "#e5e7eb", color: "#111827", fontSize: "0.8rem", cursor: "pointer" }}
+                                            >
+                                                Endre
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleDelete(t)}
+                                            style={{ padding: "0.25rem 0.6rem", borderRadius: "999px", border: "none", background: "#fee2e2", color: "#b91c1c", fontSize: "0.8rem", cursor: "pointer" }}
+                                        >
+                                            Slett
+                                        </button>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+        </section>
+    );
+};
 // ---------- Termin-oppsett ----------
 
 const TermSetup: React.FC = () => {
@@ -1850,6 +2246,7 @@ const TermSetup: React.FC = () => {
         category: string;
         requiredCount: number;
         term: number;
+        order?: number;
     };
 
     const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -1864,14 +2261,30 @@ const TermSetup: React.FC = () => {
     const [editingCategory, setEditingCategory] = useState("");
     const [editingReqId, setEditingReqId] = useState<string | null>(null);
     const [editingRequiredCount, setEditingRequiredCount] = useState<number>(0);
+    // Term label overrides (legacy fallback when no terms exist in DB)
+    const [termLabelOverrides, setTermLabelOverrides] = useState<Record<number, string>>({});
+    // Terms loaded from Firestore (replaces termConfig where available)
+    type TermDoc = { docId: string; value: number; label: string; order?: number };
+    const [terms, setTerms] = useState<TermDoc[]>([]);
+    // Inline edit state for selected term label
+    const [isEditingTermLabel, setIsEditingTermLabel] = useState(false);
+    const [termLabelInput, setTermLabelInput] = useState("");
+    const termLabelInputRef = useRef<HTMLInputElement | null>(null);
+    // Sorting modals
+    const [showTermSort, setShowTermSort] = useState(false);
+    const [termSortList, setTermSortList] = useState<TermDoc[]>([]);
+    const [showGroupSort, setShowGroupSort] = useState(false);
+    const [groupSortList, setGroupSortList] = useState<Requirement[]>([]);
 
     useEffect(() => {
         const loadAll = async () => {
             try {
                 setLoading(true);
-                const [reqSnap, timesSnap] = await Promise.all([
+                const [reqSnap, timesSnap, labelsSnap, termsSnap] = await Promise.all([
                     getDocs(collection(db, "requirements")),
                     getDocs(collection(db, "times")),
+                    getDocs(collection(db, "termLabels")).catch(() => null),
+                    getDocs(collection(db, "terms")).catch(() => null),
                 ]);
 
                 const reqs: Requirement[] = reqSnap.docs.map((d) => {
@@ -1881,6 +2294,7 @@ const TermSetup: React.FC = () => {
                         term: data.term,
                         category: data.category,
                         requiredCount: data.requiredCount ?? 0,
+                        order: typeof data?.order === "number" ? data.order : undefined,
                     };
                 });
 
@@ -1896,6 +2310,39 @@ const TermSetup: React.FC = () => {
 
                 setRequirements(reqs);
                 setTimes(ts);
+
+                // Load terms from Firestore if present
+                if (termsSnap) {
+                    const list: TermDoc[] = termsSnap.docs
+                        .map((d) => {
+                            const data = d.data() as any;
+                            const value = typeof data?.value === "number" ? data.value : undefined;
+                            const label = typeof data?.label === "string" ? data.label : "";
+                            const order = typeof data?.order === "number" ? data.order : undefined;
+                            if (typeof value !== "number") return null;
+                            return { docId: d.id, value, label, order } as TermDoc;
+                        })
+                        .filter(Boolean) as TermDoc[];
+                    list.sort((a, b) => {
+                        const oa = a.order ?? a.value;
+                        const ob = b.order ?? b.value;
+                        return oa - ob;
+                    });
+                    setTerms(list);
+                }
+
+                // Load optional term label overrides
+                if (labelsSnap) {
+                    const map: Record<number, string> = {};
+                    labelsSnap.docs.forEach((d) => {
+                        const data = d.data() as any;
+                        const val = parseInt(d.id, 10);
+                        if (!Number.isNaN(val) && typeof data?.label === "string" && data.label.trim()) {
+                            map[val] = data.label.trim();
+                        }
+                    });
+                    setTermLabelOverrides(map);
+                }
             } catch (err) {
                 console.error("Feil ved lasting av termin-oppsett:", err);
             } finally {
@@ -1908,9 +2355,200 @@ const TermSetup: React.FC = () => {
 
     const requirementsForTerm = requirements
         .filter((r) => r.term === selectedTerm)
-        .sort((a, b) =>
-            a.category.localeCompare(b.category, "nb-NO", { sensitivity: "base" })
-        );
+        .sort((a, b) => {
+            const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+            const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+            if (ao !== bo) return ao - bo;
+            return a.category.localeCompare(b.category, "nb-NO", { sensitivity: "base" });
+        });
+
+    const termOptionsWithOverrides = useMemo(() => {
+        // Derive strictly from Firestore terms; apply optional overrides from termLabels
+        const base: { value: number; label: string }[] = terms
+            .slice()
+            .sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value))
+            .map((t) => ({ value: t.value, label: t.label || `Termin ${t.value}` }));
+        if (Object.keys(termLabelOverrides).length > 0) {
+            return base.map((opt) => ({
+                ...opt,
+                label: termLabelOverrides[opt.value] ?? opt.label,
+            }));
+        }
+        return base;
+    }, [terms, termLabelOverrides]);
+
+    const labelForTerm = (value: number | null | undefined) => {
+        return labelFromTerm(termOptionsWithOverrides, value ?? null);
+    };
+
+    // Start inline editing (replace select with input)
+    const startInlineRename = () => {
+        if (selectedTerm === "") return;
+        const current = labelForTerm(selectedTerm as number);
+        setTermLabelInput(current);
+        setIsEditingTermLabel(true);
+        setTimeout(() => termLabelInputRef.current?.focus(), 0);
+    };
+
+    // Cancel inline editing
+    const cancelInlineRename = () => {
+        setIsEditingTermLabel(false);
+        setTermLabelInput("");
+    };
+
+    // Save inline edited label
+    const saveInlineRename = async () => {
+        if (selectedTerm === "") return;
+        const current = labelForTerm(selectedTerm as number);
+        const newLabel = termLabelInput.trim();
+        if (!newLabel || newLabel === current) {
+            // Nothing to save – just exit edit mode
+            setIsEditingTermLabel(false);
+            return;
+        }
+        try {
+            // If term exists in Firestore 'terms', update that document; otherwise fall back to legacy termLabels override
+            const existing = terms.find((t) => t.value === Number(selectedTerm));
+            if (existing) {
+                await updateDoc(doc(db, "terms", existing.docId), {
+                    label: newLabel,
+                    updatedAt: serverTimestamp(),
+                } as any);
+                setTerms((prev) =>
+                    prev.map((t) => (t.docId === existing.docId ? { ...t, label: newLabel } : t))
+                );
+            } else {
+                const id = String(selectedTerm);
+                await setDoc(
+                    doc(db, "termLabels", id),
+                    {
+                        label: newLabel,
+                        updatedAt: serverTimestamp(),
+                        value: Number(selectedTerm),
+                    },
+                    { merge: true }
+                );
+                setTermLabelOverrides((prev) => ({ ...prev, [Number(selectedTerm)]: newLabel }));
+            }
+            setIsEditingTermLabel(false);
+        } catch (e) {
+            console.error("Feil ved endring av modulnavn:", e);
+            alert("Kunne ikke endre navn på modulen.");
+        }
+    };
+
+    // Create a new term and immediately start inline rename
+    const createNewTerm = async () => {
+        try {
+            const currentValues = terms.map((t) => t.value);
+            const currentOrders = terms.map((t) => t.order ?? t.value);
+            const maxVal = currentValues.length > 0 ? Math.max(...currentValues) : 0;
+            const maxOrder = currentOrders.length > 0 ? Math.max(...currentOrders) : 0;
+            const newValue = maxVal + 1;
+            const newOrder = maxOrder + 1;
+            const ref = await addDoc(collection(db, "terms"), {
+                value: newValue,
+                label: "",
+                order: newOrder,
+                createdAt: serverTimestamp(),
+            });
+            const newTerm: TermDoc = { docId: ref.id, value: newValue, label: "", order: newOrder };
+            setTerms((prev) => [...prev, newTerm]);
+            setSelectedTerm(newValue);
+            setTermLabelInput("");
+            setIsEditingTermLabel(true);
+            setTimeout(() => termLabelInputRef.current?.focus(), 0);
+        } catch (e) {
+            console.error("Kunne ikke opprette ny oppmøtebok:", e);
+            alert("Kunne ikke opprette ny oppmøtebok.");
+        }
+    };
+
+    // ----- Sorting helpers -----
+    const openTermSort = () => {
+        // Only open if we have terms in Firestore
+        if (terms.length === 0) return;
+        const list = terms
+            .slice()
+            .sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value));
+        setTermSortList(list);
+        setShowTermSort(true);
+    };
+
+    const moveTerm = (index: number, dir: -1 | 1) => {
+        setTermSortList((prev) => {
+            const arr = prev.slice();
+            const to = index + dir;
+            if (to < 0 || to >= arr.length) return prev;
+            const [m] = arr.splice(index, 1);
+            arr.splice(to, 0, m);
+            return arr;
+        });
+    };
+
+    const saveTermOrder = async () => {
+        try {
+            const batch = writeBatch(db);
+            termSortList.forEach((t, idx) => {
+                batch.update(doc(db, "terms", t.docId), { order: idx + 1 } as any);
+            });
+            await batch.commit();
+            // Reflect locally
+            setTerms(termSortList.map((t, idx) => ({ ...t, order: idx + 1 })));
+            setShowTermSort(false);
+        } catch (e) {
+            console.error("Kunne ikke lagre sortering av terminer:", e);
+            alert("Kunne ikke lagre sortering av terminer.");
+        }
+    };
+
+    const openGroupSort = () => {
+        if (selectedTerm === "") return;
+        const list = requirements
+            .filter((r) => r.term === selectedTerm)
+            .slice()
+            .sort((a, b) => {
+                const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+                const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+                if (ao !== bo) return ao - bo;
+                return a.category.localeCompare(b.category, "nb-NO", { sensitivity: "base" });
+            });
+        setGroupSortList(list);
+        setShowGroupSort(true);
+    };
+
+    const moveGroup = (index: number, dir: -1 | 1) => {
+        setGroupSortList((prev) => {
+            const arr = prev.slice();
+            const to = index + dir;
+            if (to < 0 || to >= arr.length) return prev;
+            const [m] = arr.splice(index, 1);
+            arr.splice(to, 0, m);
+            return arr;
+        });
+    };
+
+    const saveGroupOrder = async () => {
+        try {
+            const batch = writeBatch(db);
+            groupSortList.forEach((r, idx) => {
+                batch.update(doc(db, "requirements", r.id), { order: idx + 1 } as any);
+            });
+            await batch.commit();
+            // Reflect locally for selected term only
+            setRequirements((prev) => {
+                const map: Record<string, number> = {};
+                groupSortList.forEach((r, idx) => (map[r.id] = idx + 1));
+                return prev.map((r) =>
+                    map[r.id] ? { ...r, order: map[r.id] } : r
+                );
+            });
+            setShowGroupSort(false);
+        } catch (e) {
+            console.error("Kunne ikke lagre sortering av grupper:", e);
+            alert("Kunne ikke lagre sortering av grupper.");
+        }
+    };
 
     const handleRenameTime = async (time: TimeDef) => {
         const newName = editingTimeName.trim();
@@ -2045,10 +2683,21 @@ const TermSetup: React.FC = () => {
         }
 
         try {
+            // Sett order til siste plass for valgt termin
+            const currentForTerm = requirements.filter((r) => r.term === selectedTerm);
+            const maxOrder = currentForTerm.length
+                ? Math.max(
+                      ...currentForTerm.map((r) =>
+                          typeof r.order === "number" ? r.order : 0
+                      )
+                  )
+                : 0;
+            const newOrder = maxOrder + 1;
             const ref = await addDoc(collection(db, "requirements"), {
                 term: selectedTerm,
                 category: name,
                 requiredCount: 0,
+                order: newOrder,
             });
             setRequirements((prev) => [
                 ...prev,
@@ -2057,6 +2706,7 @@ const TermSetup: React.FC = () => {
                     term: selectedTerm,
                     category: name,
                     requiredCount: 0,
+                    order: newOrder,
                 },
             ]);
             setNewCategoryName("");
@@ -2125,7 +2775,7 @@ const TermSetup: React.FC = () => {
 
     const handleDeleteTime = async (time: TimeDef) => {
         const sure = window.confirm(
-            `Slette timen "${time.name}" fra ${termLabel(time.term)}? Historiske sesjoner beholdes, men timen forsvinner fra admin-oppsettet.`
+            `Slette timen "${time.name}" fra ${labelForTerm(time.term)}? Historiske sesjoner beholdes, men timen forsvinner fra admin-oppsettet.`
         );
         if (!sure) return;
 
@@ -2143,6 +2793,7 @@ const TermSetup: React.FC = () => {
     }
 
     return (
+        <>
         <section style={{ marginBottom: "2rem" }}>
             {/* Toppkontroller: Termin (øverst), deretter Ny gruppe + Legg til gruppe under (desktop og mobil) */}
             <div
@@ -2153,29 +2804,105 @@ const TermSetup: React.FC = () => {
                     marginBottom: "0.75rem",
                 }}
             >
-                <div>
-                    <select
-                        value={selectedTerm}
-                        onChange={(e) => {
-                            const v = e.target.value;
-                            setSelectedTerm(v === "" ? "" : parseInt(v, 10));
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    {isEditingTermLabel ? (
+                        <input
+                            ref={termLabelInputRef}
+                            type="text"
+                            value={termLabelInput}
+                            onChange={(e) => setTermLabelInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void saveInlineRename();
+                                } else if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    cancelInlineRename();
+                                }
+                            }}
+                            placeholder="Navn på modul"
+                            style={{
+                                flex: 1,
+                                minWidth: 0,
+                                padding: "0.35rem 0.5rem",
+                                borderRadius: "0.5rem",
+                                border: "1px solid #d1d5db",
+                            }}
+                        />
+                    ) : (
+                        <select
+                            value={selectedTerm}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "__new__") {
+                                    void createNewTerm();
+                                    return;
+                                }
+                                setSelectedTerm(v === "" ? "" : parseInt(v, 10));
+                            }}
+                            style={{
+                                flex: 1,
+                                minWidth: 0,
+                                padding: "0.35rem 0.5rem",
+                                borderRadius: "0.5rem",
+                                border: "1px solid #d1d5db",
+                            }}
+                        >
+                            <option value="" disabled>
+                                Velg termin
+                            </option>
+                            {termOptionsWithOverrides.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                </option>
+                            ))}
+                            <option value="__new__">+ Ny oppmøtebok</option>
+                        </select>
+                    )}
+                    <button
+                        type="button"
+                        disabled={selectedTerm === "" && !isEditingTermLabel}
+                        onClick={() => {
+                            if (isEditingTermLabel) {
+                                void saveInlineRename();
+                            } else {
+                                startInlineRename();
+                            }
                         }}
                         style={{
-                            width: "100%",
+                            width: "160px",
+                            padding: "0.45rem 0.9rem",
+                            borderRadius: "999px",
+                            border: "none",
+                            backgroundColor: "#6CE1AB",
+                            color: "black",
+                            fontSize: "0.9rem",
+                            cursor:
+                                selectedTerm === "" && !isEditingTermLabel
+                                    ? "not-allowed"
+                                    : "pointer",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        {isEditingTermLabel ? "Lagre" : "Endre navn"}
+                    </button>
+                    {/* Sort terms button */}
+                    <button
+                        type="button"
+                        title="Sorter oppmøtebøker"
+                        disabled={terms.length === 0}
+                        onClick={openTermSort}
+                        style={{
                             padding: "0.35rem 0.5rem",
                             borderRadius: "0.5rem",
                             border: "1px solid #d1d5db",
+                            background: "#ffffff",
+                            fontSize: "0.9rem",
+                            cursor: terms.length === 0 ? "not-allowed" : "pointer",
                         }}
                     >
-                        <option value="" disabled>
-                            Velg termin
-                        </option>
-                        {TERM_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                            </option>
-                        ))}
-                    </select>
+                        ⇅
+                    </button>
                 </div>
 
                 <div
@@ -2191,6 +2918,12 @@ const TermSetup: React.FC = () => {
                         placeholder="Ny gruppe..."
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.preventDefault();
+                                void handleAddCategory();
+                            }
+                        }}
                         style={{
                             flex: 1,
                             minWidth: 0,
@@ -2203,11 +2936,12 @@ const TermSetup: React.FC = () => {
                         type="button"
                         onClick={handleAddCategory}
                         style={{
+                            width: "160px",
                             padding: "0.45rem 0.9rem",
                             borderRadius: "999px",
                             border: "none",
-                            backgroundColor: "#dc2626",
-                            color: "#ffffff",
+                            backgroundColor: "#6CE1AB",
+                            color: "black",
                             fontSize: "0.9rem",
                             cursor: "pointer",
                             whiteSpace: "nowrap",
@@ -2215,12 +2949,32 @@ const TermSetup: React.FC = () => {
                     >
                         Legg til gruppe
                     </button>
+                    {/* Sort groups button */}
+                    <button
+                        type="button"
+                        title="Sorter grupper"
+                        disabled={selectedTerm === "" || requirementsForTerm.length === 0}
+                        onClick={openGroupSort}
+                        style={{
+                            padding: "0.35rem 0.5rem",
+                            borderRadius: "0.5rem",
+                            border: "1px solid #d1d5db",
+                            background: "#ffffff",
+                            fontSize: "0.9rem",
+                            cursor:
+                                selectedTerm === "" || requirementsForTerm.length === 0
+                                    ? "not-allowed"
+                                    : "pointer",
+                        }}
+                    >
+                        ⇅
+                    </button>
                 </div>
             </div>
 
             {requirementsForTerm.length === 0 ? (
                 <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-                    Ingen grupper definert ennå for {termLabel(selectedTerm)}.
+                    Ingen grupper definert ennå for {labelForTerm(selectedTerm as number)}.
                 </p>
             ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -2547,6 +3301,12 @@ const TermSetup: React.FC = () => {
                                                 [key]: e.target.value,
                                             }))
                                         }
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                e.preventDefault();
+                                                void handleAddTime(req);
+                                            }
+                                        }}
                                         style={{
                                             flex: 1,
                                             padding: "0.3rem 0.5rem",
@@ -2577,6 +3337,165 @@ const TermSetup: React.FC = () => {
                 </div>
             )}
         </section>
+        {/* Modals for sorting */}
+        {showTermSort && (
+            <div
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    backgroundColor: "rgba(15,23,42,0.35)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 50,
+                }}
+            >
+                <div
+                    style={{
+                        width: "100%",
+                        maxWidth: "420px",
+                        backgroundColor: "#ffffff",
+                        borderRadius: "1rem",
+                        padding: "1rem 1.25rem",
+                        boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                    }}
+                >
+                    <h3 style={{ marginTop: 0 }}>Sorter oppmøtebøker</h3>
+                    <ul style={{ listStyle: "none", padding: 0, margin: "0 0 0.75rem" }}>
+                        {termSortList.map((t, idx) => (
+                            <li
+                                key={t.docId}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    border: "1px solid #e5e7eb",
+                                    borderRadius: "0.5rem",
+                                    padding: "0.4rem 0.6rem",
+                                    marginBottom: "0.4rem",
+                                }}
+                            >
+                                <span style={{ fontSize: "0.9rem" }}>{t.label || `Termin ${t.value}`}</span>
+                                <span style={{ display: "flex", gap: "0.25rem" }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => moveTerm(idx, -1)}
+                                        disabled={idx === 0}
+                                        style={{ padding: "0.2rem 0.4rem", borderRadius: "0.35rem", border: "1px solid #d1d5db", background: "#fff" }}
+                                    >
+                                        ▲
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => moveTerm(idx, 1)}
+                                        disabled={idx === termSortList.length - 1}
+                                        style={{ padding: "0.2rem 0.4rem", borderRadius: "0.35rem", border: "1px solid #d1d5db", background: "#fff" }}
+                                    >
+                                        ▼
+                                    </button>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowTermSort(false)}
+                            style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "1px solid #d1d5db", background: "#fff" }}
+                        >
+                            Avbryt
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void saveTermOrder()}
+                            style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "#fff" }}
+                        >
+                            Lagre rekkefølge
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {showGroupSort && (
+            <div
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    backgroundColor: "rgba(15,23,42,0.35)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 50,
+                }}
+            >
+                <div
+                    style={{
+                        width: "100%",
+                        maxWidth: "420px",
+                        backgroundColor: "#ffffff",
+                        borderRadius: "1rem",
+                        padding: "1rem 1.25rem",
+                        boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                    }}
+                >
+                    <h3 style={{ marginTop: 0 }}>Sorter grupper</h3>
+                    <ul style={{ listStyle: "none", padding: 0, margin: "0 0 0.75rem" }}>
+                        {groupSortList.map((g, idx) => (
+                            <li
+                                key={g.id}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    border: "1px solid #e5e7eb",
+                                    borderRadius: "0.5rem",
+                                    padding: "0.4rem 0.6rem",
+                                    marginBottom: "0.4rem",
+                                }}
+                            >
+                                <span style={{ fontSize: "0.9rem" }}>{g.category}</span>
+                                <span style={{ display: "flex", gap: "0.25rem" }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => moveGroup(idx, -1)}
+                                        disabled={idx === 0}
+                                        style={{ padding: "0.2rem 0.4rem", borderRadius: "0.35rem", border: "1px solid #d1d5db", background: "#fff" }}
+                                    >
+                                        ▲
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => moveGroup(idx, 1)}
+                                        disabled={idx === groupSortList.length - 1}
+                                        style={{ padding: "0.2rem 0.4rem", borderRadius: "0.35rem", border: "1px solid #d1d5db", background: "#fff" }}
+                                    >
+                                        ▼
+                                    </button>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowGroupSort(false)}
+                            style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "1px solid #d1d5db", background: "#fff" }}
+                        >
+                            Avbryt
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void saveGroupOrder()}
+                            style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "#fff" }}
+                        >
+                            Lagre rekkefølge
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 
@@ -2584,10 +3503,11 @@ const TermSetup: React.FC = () => {
 // ---------- Hoved AdminPage med gamle knappe-struktur ----------
 
 const AdminPage: React.FC = () => {
-    const { user, loading } = useAuth();
+    const { user, loading, logout } = useAuth();
     const [mainTab, setMainTab] = useState<"setup" | "users" | "teacherView">(
         "setup"
     );
+    const [showProfile, setShowProfile] = useState(false);
 
     if (loading) {
         return (
@@ -2597,7 +3517,6 @@ const AdminPage: React.FC = () => {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: "#f5f5f7",
                 }}
             >
                 <LoadingSpinner />
@@ -2608,15 +3527,14 @@ const AdminPage: React.FC = () => {
     if (!user || user.role !== "admin") {
         return (
             <div
-                style={{
-                    minHeight: "100vh",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "#f5f5f7",
-                    padding: "1.5rem",
-                }}
-            >
+            style={{
+                minHeight: "100vh",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "1.5rem",
+            }}
+        >
                 <div className="page-card page-card--admin">
                     <h2>Ingen tilgang</h2>
                     <p>Du må være logget inn som administrator for å se denne siden.</p>
@@ -2626,17 +3544,60 @@ const AdminPage: React.FC = () => {
     }
 
     return (
+        <>
         <div
             style={{
                 minHeight: "100vh",
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "center",
-                background: "#f5f5f7",
                 padding: "1.5rem 1rem",
             }}
         >
             <div className="page-card page-card--admin">
+                {/* Topp: navn + logg ut */}
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "0.75rem",
+                    }}
+                >
+                    <div style={{ fontWeight: 600 }}>
+                        {user.displayName || user.email}
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowProfile(true)}
+                            style={{
+                                padding: "0.35rem 0.9rem",
+                                borderRadius: "999px",
+                                border: "1px solid #d1d5db",
+                                background: "#ffffff",
+                                cursor: "pointer",
+                                fontSize: "0.85rem",
+                            }}
+                        >
+                            Min profil
+                        </button>
+                        <button
+                            type="button"
+                            onClick={logout}
+                            style={{
+                                padding: "0.35rem 0.9rem",
+                                borderRadius: "999px",
+                                border: "1px solid #d1d5db",
+                                background: "#ffffff",
+                                cursor: "pointer",
+                                fontSize: "0.85rem",
+                            }}
+                        >
+                            Logg ut
+                        </button>
+                    </div>
+                </div>
                 <header
                     style={{
                         marginBottom: "1rem",
@@ -2656,7 +3617,7 @@ const AdminPage: React.FC = () => {
                         forhåndsvisning for lærere.
                     </p>
 
-                    {/* Øverste knapper: Oppsett / Brukere */}
+                    {/* Øverste knapper: Oppmøtebøker / Brukere */}
                     <div
                         style={{
                             display: "flex",
@@ -2672,8 +3633,8 @@ const AdminPage: React.FC = () => {
                                 borderRadius: "999px",
                                 border: "1px solid #e5e7eb",
                                 background:
-                                    mainTab === "setup" ? "#b91c1c" : "#ffffff",
-                                color: mainTab === "setup" ? "#ffffff" : "#111827",
+                                    mainTab === "setup" ? "#6CE1AB" : "#ffffff",
+                                color: mainTab === "setup" ? "black" : "#111827",
                                 fontSize: "0.85rem",
                                 cursor: "pointer",
                             }}
@@ -2689,8 +3650,8 @@ const AdminPage: React.FC = () => {
                                 borderRadius: "999px",
                                 border: "1px solid #e5e7eb",
                                 background:
-                                    mainTab === "users" ? "#b91c1c" : "#ffffff",
-                                color: mainTab === "users" ? "#ffffff" : "#111827",
+                                    mainTab === "users" ? "#6CE1AB" : "#ffffff",
+                                color: mainTab === "users" ? "black" : "#111827",
                                 fontSize: "0.85rem",
                                 cursor: "pointer",
                             }}
@@ -2702,9 +3663,18 @@ const AdminPage: React.FC = () => {
 
                 {mainTab === "setup" && <TermSetup />}
                 {mainTab === "users" && <UsersAdmin />}
-                {mainTab === "teacherView" && <TeacherPreview />}
             </div>
         </div>
+        {showProfile && (
+            <ProfileModal
+                uid={user.uid}
+                role={user.role}
+                email={user.email}
+                displayName={user.displayName}
+                onClose={() => setShowProfile(false)}
+            />
+        )}
+        </>
     );
 };
 
