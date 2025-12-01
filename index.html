@@ -19,13 +19,14 @@
          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
          sans-serif;
          margin: 0;
-         padding: 20px;
-         background: rgb(206, 255, 223);
+         padding: 0;
+         background: #CEFFDF;
          color: #111827;
        }
 
       .page-card {
-        max-width: 540px;
+        width: 100%;
+        max-width: 600px;
         margin: 0 auto;
         padding: 1rem 1.25rem;
         background: #f9fafb;
@@ -34,18 +35,17 @@
       }
 
       @media (max-width: 640px) {
-        body {
-          padding: 16px;
-        }
-
+        /* Behold kortfølelsen også på mobil, men la sidekantene vise bakgrunnsfargen */
         .page-card {
-          background: transparent; /* ingen kort-bakgrunn på mobil */
-          box-shadow: none;
-          padding: 0; /* la innholdet ligge mer “flate” */
+          width: 100%;
+          max-width: 600px;
+          padding: 0.9rem 1rem;
+          background: #f9fafb;
+          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
         }
       }
     </style>
-    <script type="module" crossorigin src="/attendance-book/assets/index-Cy-wXz7p.js"></script>
+    <script type="module" crossorigin src="/attendance-book/assets/index-B2w9q43a.js"></script>
   </head>
   <body>
     <div id="root"></div>
