@@ -390,7 +390,10 @@ function StudentPage({ user }: StudentPageProps) {
                     </button>
                 </div>
             </div>
-            <h2 style={{ textAlign: "center", marginBottom: "1rem" }}>
+            <h2 style={{
+                textAlign: "center",
+                margin: "4rem 0 1.5rem",
+            }}>
                 Registrer oppmøte
             </h2>
 
@@ -531,6 +534,8 @@ function StudentPage({ user }: StudentPageProps) {
                                 borderRadius: "0.5rem",
                                 border: "1px solid #d1d5db",
                                 minWidth: "10rem",
+                                maxWidth: "12rem",
+                                marginTop: "0.5rem",
                             }}
                         />
 
@@ -541,7 +546,7 @@ function StudentPage({ user }: StudentPageProps) {
                             type="button"
                             onClick={() => setScanning((s) => !s)}
                             style={{
-                                marginTop: "1rem",
+                                margin: "2rem 0",
                                 padding: "0.4rem 0.9rem",
                                 borderRadius: "999px",
                                 border: "1px solid #d1d5db",
@@ -578,10 +583,13 @@ function StudentPage({ user }: StudentPageProps) {
                 )}
             </div>
 
-            <hr style={{ marginTop: "2rem", marginBottom: "1rem" }} />
+            <hr style={{ marginTop: "2rem", marginBottom: "2rem" }} />
 
             <section>
-                <h3 style={{textAlign: "center"}}>{labelFromTerm(termOptions, selectedTerm)}</h3>
+                <h3 style={{
+                    textAlign: "center",
+                    margin: "0 0 1.5rem",
+                }}>{labelFromTerm(termOptions, selectedTerm)}</h3>
 
                 {statsLoading ? (
                     <LoadingSpinner />

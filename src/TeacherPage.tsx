@@ -659,13 +659,17 @@ function TeacherPage({ user }: TeacherPageProps) {
                 </div>
             </div>
 
-            <h2 style={{ textAlign: "center", marginBottom: "2rem" }}>
+            <h2 style={{
+                textAlign: "center",
+                margin: "4rem 0 3rem" }}>
                 Registrer oppmøte
             </h2>
 
             {/* Termin øverst, time under */}
-            <section style={{ marginTop: "1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div style={{ marginBottom: "1rem", width: "100%", maxWidth: 520 }}>
+            <section style={{
+                marginTop: "1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{
+                    marginBottom: "1.25rem", width: "100%", maxWidth: 520 }}>
                     {(() => {
                         // Bygg liste over valgbare terminer
                         const allowedSet =
@@ -807,7 +811,9 @@ function TeacherPage({ user }: TeacherPageProps) {
 
             {/* Nylig registrerte timer (kun når ingen aktiv økt) */}
             {!activeSession && recentTimes.length > 0 && (
-                <section style={{ marginTop: "1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <section style={{
+                    marginTop: "1.5rem",
+                    display: "flex", flexDirection: "column", alignItems: "center" }}>
                     <div style={{ width: "100%", maxWidth: 520 }}>
                         <h4 style={{ textAlign: "center", marginTop: 0 }}>Nylig registrerte timer</h4>
                         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>

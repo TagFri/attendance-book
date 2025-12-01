@@ -3321,98 +3321,106 @@ const TermSetup: React.FC = () => {
                     marginBottom: "0.75rem",
                 }}
             >
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                    {isEditingTermLabel && isSuperAdmin ? (
-                        <input
-                            ref={termLabelInputRef}
-                            type="text"
-                            value={termLabelInput}
-                            onChange={(e) => setTermLabelInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    void saveInlineRename();
-                                } else if (e.key === "Escape") {
-                                    e.preventDefault();
-                                    cancelInlineRename();
-                                }
-                            }}
-                            placeholder="Navn på modul"
-                            style={{
-                                flex: 1,
-                                minWidth: 0,
-                                padding: "0.35rem 0.5rem",
-                                borderRadius: "0.5rem",
-                                border: "1px solid #d1d5db",
-                            }}
-                        />
-                    ) : (
-                        <select
-                            value={selectedTerm}
-                            onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === "__new__") {
-                                    if (hasGate) {
-                                        // Begrenset admin kan ikke opprette nye oppmøtebøker
+                <div className="admin-books-controls" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    <div
+                        className={`admin-books-rest${isSuperAdmin ? " admin-books-rest--split" : ""}`}
+                        style={{ display: "flex", gap: "0.5rem", flex: 1, minWidth: 0 }}
+                    >
+                        {isEditingTermLabel && isSuperAdmin ? (
+                            <input
+                                className="admin-books-select"
+                                ref={termLabelInputRef}
+                                type="text"
+                                value={termLabelInput}
+                                onChange={(e) => setTermLabelInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        void saveInlineRename();
+                                    } else if (e.key === "Escape") {
+                                        e.preventDefault();
+                                        cancelInlineRename();
+                                    }
+                                }}
+                                placeholder="Navn på modul"
+                                style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    padding: "0.35rem 0.5rem",
+                                    borderRadius: "0.5rem",
+                                    border: "1px solid #d1d5db",
+                                }}
+                            />
+                        ) : (
+                            <select
+                                className="admin-books-select"
+                                value={selectedTerm}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    if (v === "__new__") {
+                                        if (hasGate) {
+                                            // Begrenset admin kan ikke opprette nye oppmøtebøker
+                                            return;
+                                        }
+                                        void createNewTerm();
                                         return;
                                     }
-                                    void createNewTerm();
-                                    return;
-                                }
-                                setSelectedTerm(v === "" ? "" : parseInt(v, 10));
-                            }}
-                            style={{
-                                flex: 1,
-                                minWidth: 0,
-                                padding: "0.35rem 0.5rem",
-                                borderRadius: "0.5rem",
-                                border: "1px solid #d1d5db",
-                                // Full width when no admin actions are shown (non-superadmin)
-                                width: isSuperAdmin ? undefined : "100%",
-                            }}
-                        >
-                            <option value="" disabled>
-                                Velg termin
-                            </option>
-                            {(!hasGate
-                                ? termOptionsWithOverrides
-                                : termOptionsWithOverrides.filter((opt) => allowedSet?.has(opt.value)))
-                                .map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label}
+                                    setSelectedTerm(v === "" ? "" : parseInt(v, 10));
+                                }}
+                                style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    padding: "0.35rem 0.5rem",
+                                    borderRadius: "0.5rem",
+                                    border: "1px solid #d1d5db",
+                                    // Full width when no admin actions are shown (non-superadmin)
+                                    width: isSuperAdmin ? undefined : "100%",
+                                }}
+                            >
+                                <option value="" disabled>
+                                    Velg termin
                                 </option>
-                            ))}
-                            {!hasGate && <option value="__new__">+ Ny oppmøtebok</option>}
-                        </select>
-                    )}
+                                {(!hasGate
+                                    ? termOptionsWithOverrides
+                                    : termOptionsWithOverrides.filter((opt) => allowedSet?.has(opt.value)))
+                                    .map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                {!hasGate && <option value="__new__">+ Ny oppmøtebok</option>}
+                            </select>
+                        )}
+                        {isSuperAdmin && (
+                            <button
+                                className={"button-green admin-books-action"}
+                                type="button"
+                                disabled={selectedTerm === "" && !isEditingTermLabel}
+                                onClick={() => {
+                                    if (isEditingTermLabel) {
+                                        void saveInlineRename();
+                                    } else {
+                                        startInlineRename();
+                                    }
+                                }}
+                                style={{
+                                    width: "160px",
+                                    padding: "0.45rem 0.9rem",
+                                    cursor:
+                                        selectedTerm === "" && !isEditingTermLabel
+                                            ? "not-allowed"
+                                            : "pointer",
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                {isEditingTermLabel ? "Legg til" : "Endre navn"}
+                            </button>
+                        )}
+                    </div>
+                    {/* Sort/filter button takes its space; rest splits 40/60 on small screens */}
                     {isSuperAdmin && (
                         <button
-                            className={"button-green"}
-                            type="button"
-                            disabled={selectedTerm === "" && !isEditingTermLabel}
-                            onClick={() => {
-                                if (isEditingTermLabel) {
-                                    void saveInlineRename();
-                                } else {
-                                    startInlineRename();
-                                }
-                            }}
-                            style={{
-                                width: "160px",
-                                padding: "0.45rem 0.9rem",
-                                cursor:
-                                    selectedTerm === "" && !isEditingTermLabel
-                                        ? "not-allowed"
-                                        : "pointer",
-                                whiteSpace: "nowrap",
-                            }}
-                        >
-                            {isEditingTermLabel ? "Lagre" : "Endre navn"}
-                        </button>
-                    )}
-                    {/* Sort terms button */}
-                    {isSuperAdmin && (
-                        <button
+                            className="admin-books-filter"
                             type="button"
                             title="Sorter oppmøtebøker"
                             disabled={terms.length === 0}
@@ -3431,14 +3439,7 @@ const TermSetup: React.FC = () => {
                     )}
                 </div>
 
-                <div
-                    style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                    }}
-                >
+                <div className="admin-books-controls" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                     {(() => {
                         const termVal = selectedTerm === "" ? null : Number(selectedTerm);
                         const t = termVal != null ? terms.find((x) => x.value === termVal) : undefined;
@@ -3449,64 +3450,68 @@ const TermSetup: React.FC = () => {
                         const canEditGroups = termVal != null && (hasName || hasOverride);
                         return (
                             <>
-                    <input
-                        type="text"
-                        placeholder="Ny gruppe..."
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && canEditGroups) {
-                                e.preventDefault();
-                                void handleAddCategory();
-                            }
-                        }}
-                        disabled={!canEditGroups}
-                        style={{
-                            flex: 1,
-                            minWidth: 0,
-                            padding: "0.35rem 0.5rem",
-                            borderRadius: "0.5rem",
-                            border: "1px solid #d1d5db",
-                            opacity: canEditGroups ? 1 : 0.6,
-                            cursor: canEditGroups ? "text" : "not-allowed",
-                        }}
-                    />
-                    <button
-                        className={"button-green"}
-                        type="button"
-                        onClick={handleAddCategory}
-                        disabled={!canEditGroups}
-                        style={{
-                            width: "160px",
-                            padding: "0.45rem 0.9rem",
-                            cursor: canEditGroups ? "pointer" : "not-allowed",
-                            whiteSpace: "nowrap",
-                            opacity: canEditGroups ? 1 : 0.7,
-                        }}
-                    >
-                        Legg til gruppe
-                    </button>
-                    {/* Sort groups button */}
-                    <button
-                        type="button"
-                        title="Sorter grupper"
-                        disabled={!canEditGroups || requirementsForTerm.length === 0}
-                        onClick={openGroupSort}
-                        style={{
-                            padding: "0.35rem 0.5rem",
-                            borderRadius: "0.5rem",
-                            border: "1px solid #d1d5db",
-                            background: "#ffffff",
-                            fontSize: "0.9rem",
-                            cursor:
-                                !canEditGroups || requirementsForTerm.length === 0
-                                    ? "not-allowed"
-                                    : "pointer",
-                            opacity: !canEditGroups || requirementsForTerm.length === 0 ? 0.7 : 1,
-                        }}
-                    >
-                        ⇅
-                    </button>
+                                <div className={`admin-books-rest admin-books-rest--split`} style={{ display: "flex", gap: "0.5rem", flex: 1, minWidth: 0 }}>
+                                    <input
+                                        className="admin-books-select"
+                                        type="text"
+                                        placeholder="Ny gruppe..."
+                                        value={newCategoryName}
+                                        onChange={(e) => setNewCategoryName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" && canEditGroups) {
+                                                e.preventDefault();
+                                                void handleAddCategory();
+                                            }
+                                        }}
+                                        disabled={!canEditGroups}
+                                        style={{
+                                            flex: 1,
+                                            minWidth: 0,
+                                            padding: "0.35rem 0.5rem",
+                                            borderRadius: "0.5rem",
+                                            border: "1px solid #d1d5db",
+                                            opacity: canEditGroups ? 1 : 0.6,
+                                            cursor: canEditGroups ? "text" : "not-allowed",
+                                        }}
+                                    />
+                                    <button
+                                        className={"button-green admin-books-action"}
+                                        type="button"
+                                        onClick={handleAddCategory}
+                                        disabled={!canEditGroups}
+                                        style={{
+                                            width: "160px",
+                                            padding: "0.45rem 0.9rem",
+                                            cursor: canEditGroups ? "pointer" : "not-allowed",
+                                            whiteSpace: "nowrap",
+                                            opacity: canEditGroups ? 1 : 0.7,
+                                        }}
+                                    >
+                                        Legg til
+                                    </button>
+                                </div>
+                                {/* Sort groups button */}
+                                <button
+                                    className="admin-books-filter"
+                                    type="button"
+                                    title="Sorter grupper"
+                                    disabled={!canEditGroups || requirementsForTerm.length === 0}
+                                    onClick={openGroupSort}
+                                    style={{
+                                        padding: "0.35rem 0.5rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        background: "#ffffff",
+                                        fontSize: "0.9rem",
+                                        cursor:
+                                            !canEditGroups || requirementsForTerm.length === 0
+                                                ? "not-allowed"
+                                                : "pointer",
+                                        opacity: !canEditGroups || requirementsForTerm.length === 0 ? 0.7 : 1,
+                                    }}
+                                >
+                                    ⇅
+                                </button>
                             </>
                         );
                     })()}
@@ -3665,6 +3670,7 @@ const TermSetup: React.FC = () => {
                                     >
                                         {/* Endre / Lagre gruppe */}
                                         <button
+                                            className={"button-green admin-books-action"}
                                             type="button"
                                             onClick={() =>
                                                 isEditingReq
@@ -3672,16 +3678,12 @@ const TermSetup: React.FC = () => {
                                                     : startEditRequirement(req)
                                             }
                                             style={{
-                                                padding: "0.25rem 0.6rem",
-                                                borderRadius: "999px",
-                                                border: "none",
-                                                backgroundColor: "#e5e7eb",
-                                                color: "#111827",
-                                                fontSize: "0.75rem",
+                                                padding: "0.45rem 0.9rem",
                                                 cursor: "pointer",
+                                                whiteSpace: "nowrap",
                                             }}
                                         >
-                                            {isEditingReq ? "Lagre" : "Endre gruppe"}
+                                            {isEditingReq ? "Lagre" : "Endre navn"}
                                         </button>
 
                                         {/* Slett gruppe */}

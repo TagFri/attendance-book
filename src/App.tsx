@@ -2,6 +2,9 @@ import LoadingSpinner from "./LoadingSpinner";
 import type React from "react";
 import { useState } from "react";
 import { useAuth } from "./hooks/useAuth";
+import { auth } from "./firebase";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { toast } from "sonner";
 import StudentPage from "./StudentPage";
 import TeacherPage from "./TeacherPage";
 import AdminPage from "./AdminPage";
@@ -24,6 +27,7 @@ function App() {
     // Registrering er deaktivert – kun innlogging
     const [authError, setAuthError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [sendingReset, setSendingReset] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -54,6 +58,31 @@ function App() {
             setAuthError(msg);
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        const trimmed = email.trim();
+        if (!trimmed) {
+            toast.error("Skriv inn e‑postadressen din først.");
+            return;
+        }
+        setSendingReset(true);
+        try {
+            await sendPasswordResetEmail(auth, trimmed);
+            toast.success("Sendte e‑post for tilbakestilling av passord.");
+        } catch (err: any) {
+            console.error(err);
+            let msg = "Kunne ikke sende e‑post for tilbakestilling.";
+            if (err?.code === "auth/invalid-email") {
+                msg = "Ugyldig e‑postadresse.";
+            } else if (err?.code === "auth/user-not-found") {
+                // For sikkerhet kan vi bruke en nøytral melding, men vi informerer brukeren om å sjekke adressen
+                msg = "Fant ingen bruker for denne e‑postadressen.";
+            }
+            toast.error(msg);
+        } finally {
+            setSendingReset(false);
         }
     };
 
@@ -151,6 +180,25 @@ function App() {
                                 }}
                             >
                                 {submitting ? "Logger inn..." : "Logg inn"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleForgotPassword}
+                                disabled={sendingReset}
+                                style={{
+                                    width: "100%",
+                                    padding: "0.6rem 1rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    background: "#6CE1AB",
+                                    color: "black",
+                                    fontWeight: 500,
+                                    cursor: "pointer",
+                                    marginTop: 0,
+                                    marginBottom: "0.25rem",
+                                }}
+                            >
+                                {sendingReset ? "Sender e‑post..." : "Glemt passord"}
                             </button>
                         </form>
                     </div>
