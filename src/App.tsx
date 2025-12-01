@@ -61,11 +61,9 @@ function App() {
         return (
             <>
                 {/* Main viewport-height wrapper to keep footer below the fold */}
-                <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", padding: "1rem 0.75rem 0" }}>
-                    <div style={{ width: "100%", display: "flex", justifyContent: "center", margin: "auto 0" }}>
-                        <div className="page-card">
-                            <LoadingSpinner />
-                        </div>
+                <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "1rem 0.75rem 0", width: "100%" }}>
+                    <div className="page-card">
+                        <LoadingSpinner />
                     </div>
                 </div>
                 {/* Footer rendered outside the 100vh wrapper so it starts out of sight */}
@@ -77,10 +75,9 @@ function App() {
     if (!user) {
         return (
             <>
-                <div className="front-page" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#CEFFDF", width: "100%", padding: "1rem 0.75rem 0" }}>
-                    <div style={{ width: "100%", display: "flex", justifyContent: "center", margin: "auto 0" }}>
-                        <div className="page-card" style={{ maxWidth: "420px" }}>
-                            <h1 style={{ marginBottom: "2rem", textAlign: "center"}}>Oppmøteregistrering</h1>
+                <div className="front-page" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", background: "#CEFFDF", width: "100%", padding: "1rem 0.75rem 0" }}>
+                    <div className="page-card">
+                        <h1 style={{ marginBottom: "2rem", textAlign: "center"}}>Oppmøteregistrering</h1>
 
                         <form onSubmit={handleSubmit}>
                             <div style={{ marginBottom: "0.75rem" }}>
@@ -156,7 +153,6 @@ function App() {
                                 {submitting ? "Logger inn..." : "Logg inn"}
                             </button>
                         </form>
-                        </div>
                     </div>
                 </div>
                 <Footer />
@@ -168,21 +164,19 @@ function App() {
     return (
         <>
             {/* Center page content until it grows tall; leave slim top/side background */}
-            <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", width: "100%", padding: "1rem 0.75rem 0" }}>
-                <div style={{ width: "100%", display: "flex", justifyContent: "center", margin: "auto 0" }}>
-                    {user.role === "admin" ? (
-                        <AdminPage user={user} />
-                    ) : user.role === "teacher" ? (
-                        <TeacherPage user={user} />
-                    ) : (
-                        <StudentPage user={user} />
-                    )}
-                </div>
+            <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", padding: "1rem 0.75rem 0" }}>
+                {user.role === "admin" ? (
+                    <AdminPage user={user} />
+                ) : user.role === "teacher" ? (
+                    <TeacherPage user={user} />
+                ) : (
+                    <StudentPage user={user} />
+                )}
             </div>
             {/* Footer sits after the viewport-height content, so it starts out of sight */}
             <Footer />
         </>
-    );
+        );
 }
 
 export default App;

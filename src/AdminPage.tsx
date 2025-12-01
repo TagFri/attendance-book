@@ -22,6 +22,7 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { labelFromTerm, shortLabelFromTerm } from "./terms";
 import ProfileModal from "./ProfileModal";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { toast } from "sonner";
 
 // ---------- Typer ----------
 
@@ -73,7 +74,7 @@ const UsersAdmin: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [activeTab, setActiveTab] = useState<"teachers" | "students" | "admins">(
-        "teachers"
+        "students"
     );
 
     // Lærere: filter + sort
@@ -219,7 +220,7 @@ const UsersAdmin: React.FC = () => {
             }));
         } catch (e) {
             console.error("Feil ved godkjenning av bok:", e);
-            alert("Kunne ikke godkjenne bok.");
+            toast.error("Kunne ikke godkjenne bok.");
         }
     };
 
@@ -237,7 +238,7 @@ const UsersAdmin: React.FC = () => {
             }));
         } catch (e) {
             console.error("Feil ved oppheving av godkjenning:", e);
-            alert("Kunne ikke oppheve godkjenning.");
+            toast.error("Kunne ikke oppheve godkjenning.");
         }
     };
 
@@ -315,10 +316,12 @@ const UsersAdmin: React.FC = () => {
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return allUsers;
+        const queryHasAt = q.includes("@");
         return allUsers.filter((u) => {
-            const namePart = (u.displayName ?? "").toLowerCase();
-            const emailPart = (u.email ?? "").toLowerCase();
-            const phonePart = (u.phone ?? "").toLowerCase();
+            const namePart = String(u.displayName ?? "").toLowerCase();
+            const rawEmail = String(u.email ?? "").toLowerCase();
+            const emailPart = queryHasAt ? rawEmail : rawEmail.split("@")[0] ?? rawEmail;
+            const phonePart = String(u.phone ?? "").toLowerCase();
             const text = `${namePart} ${emailPart} ${phonePart}`;
             return text.includes(q);
         });
@@ -350,8 +353,8 @@ const UsersAdmin: React.FC = () => {
             if (teacherSortKey === "email") return u.email ?? "";
             return u.phone ?? "";
         };
-        const va = getField(a).toLowerCase();
-        const vb = getField(b).toLowerCase();
+        const va = String(getField(a) ?? "").toLowerCase();
+        const vb = String(getField(b) ?? "").toLowerCase();
         if (va < vb) return teacherSortDir === "asc" ? -1 : 1;
         if (va > vb) return teacherSortDir === "asc" ? 1 : -1;
         return 0;
@@ -364,8 +367,8 @@ const UsersAdmin: React.FC = () => {
             if (studentSortKey === "email") return u.email ?? "";
             return u.phone ?? "";
         };
-        const va = getField(a).toLowerCase();
-        const vb = getField(b).toLowerCase();
+        const va = String(getField(a) ?? "").toLowerCase();
+        const vb = String(getField(b) ?? "").toLowerCase();
         if (va < vb) return studentSortDir === "asc" ? -1 : 1;
         if (va > vb) return studentSortDir === "asc" ? 1 : -1;
         return 0;
@@ -378,8 +381,8 @@ const UsersAdmin: React.FC = () => {
             if (adminSortKey === "email") return u.email ?? "";
             return u.phone ?? "";
         };
-        const va = getField(a).toLowerCase();
-        const vb = getField(b).toLowerCase();
+        const va = String(getField(a) ?? "").toLowerCase();
+        const vb = String(getField(b) ?? "").toLowerCase();
         if (va < vb) return adminSortDir === "asc" ? -1 : 1;
         if (va > vb) return adminSortDir === "asc" ? 1 : -1;
         return 0;
@@ -442,7 +445,7 @@ const UsersAdmin: React.FC = () => {
             );
         } catch (err) {
             console.error("Feil ved oppdatering av brukerfelt:", err);
-            alert("Kunne ikke oppdatere bruker.");
+            toast.error("Kunne ikke oppdatere bruker.");
         }
     };
 
@@ -464,12 +467,12 @@ const UsersAdmin: React.FC = () => {
         const phone = editTeacherPhone.trim();
 
         if (!email) {
-            alert("E-post må fylles ut for å opprette lærer.");
+            toast.error("E-post må fylles ut for å opprette lærer.");
             return;
         }
 
         if (!editTeacherAllowedTerms || editTeacherAllowedTerms.length === 0) {
-            alert("Velg minst én termin læreren kan registrere for.");
+            toast.error("Velg minst én termin læreren kan registrere for.");
             return;
         }
 
@@ -520,17 +523,18 @@ const UsersAdmin: React.FC = () => {
             setTeacherModalMode(null);
             setTeacherModalUser(null);
 
-            alert(
-                `Ny lærer opprettet.\n\nE-post: ${email}\nMidlertidig passord: ${tempPassword}\n\nGi passordet til læreren og be dem bytte etter første innlogging.`
-            );
+            toast.success("Ny lærer opprettet", {
+                description: `E‑post: ${email}\nMidlertidig passord: ${tempPassword}\nGi passordet videre og be om passordbytte etter første innlogging.`,
+                duration: 15000,
+            });
         } catch (err: any) {
             console.error("Feil ved oppretting av lærer:", err);
             if (err?.code === "auth/email-already-in-use") {
-                alert(
+                toast.error(
                     "E-posten er allerede i bruk i Auth. Bruk en annen eller koble eksisterende bruker."
                 );
             } else {
-                alert("Kunne ikke opprette lærer. Se console for mer info.");
+                toast.error("Kunne ikke opprette lærer. Se console for mer info.");
             }
         }
     };
@@ -558,7 +562,7 @@ const UsersAdmin: React.FC = () => {
                     await updateAuthEmail({ uid: docId, newEmail: editTeacherEmail.trim() });
                 } catch (e: any) {
                     console.error("adminUpdateUserEmail failed", e);
-                    alert("Kunne ikke oppdatere lærerens e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
+                    toast.error("Kunne ikke oppdatere lærerens e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
                     return;
                 }
             }
@@ -590,7 +594,7 @@ const UsersAdmin: React.FC = () => {
             setTeacherModalUser(null);
         } catch (err) {
             console.error("Feil ved lagring av lærer:", err);
-            alert("Kunne ikke lagre endringer for lærer.");
+            toast.error("Kunne ikke lagre endringer for lærer.");
         }
     };
 
@@ -624,13 +628,26 @@ const UsersAdmin: React.FC = () => {
         const name = editStudentName.trim();
         const phone = editStudentPhone.trim();
 
+        // Pålagt: navn, e‑post og termin
+        if (!name) {
+            toast.error("Navn må fylles ut for å opprette student.");
+            return;
+        }
+
         if (!email) {
-            alert("E-post må fylles ut for å opprette student.");
+            toast.error("E-post må fylles ut for å opprette student.");
+            return;
+        }
+
+        // Enkel e‑postvalidering før vi treffer Firebase (for raskere tilbakemelding)
+        const basicEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!basicEmailRegex.test(email)) {
+            toast.error("Ugyldig e‑post.");
             return;
         }
 
         if (editStudentTerm == null) {
-            alert("Velg termin studenten tilhører.");
+            toast.error("Velg termin studenten tilhører.");
             return;
         }
 
@@ -681,17 +698,25 @@ const UsersAdmin: React.FC = () => {
             setStudentModalMode(null);
             setStudentModalUser(null);
 
-            alert(
-                `Ny student opprettet.\n\nE-post: ${email}\nMidlertidig passord: ${tempPassword}\n\nGi passordet til studenten og be dem bytte etter første innlogging.`
-            );
+            // Oppdatert bekreftelsesmelding iht. krav:
+            // «ny student med mail .... er opprettet. Be studenten trykke glemt passord for å lage sitt eget passord»
+            toast.success(`Ny student med e‑post ${email} er opprettet.`, {
+                description: "Be studenten trykke ‘Glemt passord’ på innloggingssiden for å lage sitt eget passord.",
+                duration: 12000,
+            });
         } catch (err: any) {
             console.error("Feil ved oppretting av student:", err);
-            if (err?.code === "auth/email-already-in-use") {
-                alert(
+            if (err?.code === "auth/invalid-email") {
+                // Spesifikk feilmelding i UI – ikke kun i console
+                toast.error("Ugyldig e‑post.");
+            } else if (err?.code === "auth/email-already-in-use") {
+                toast.error(
                     "E-posten er allerede i bruk i Auth. Bruk en annen eller koble eksisterende bruker."
                 );
+            } else if (err?.code === "auth/missing-email") {
+                toast.error("E‑post mangler.");
             } else {
-                alert("Kunne ikke opprette student. Se console for mer info.");
+                toast.error("Kunne ikke opprette student. Prøv igjen senere.");
             }
         }
     };
@@ -718,7 +743,7 @@ const UsersAdmin: React.FC = () => {
                     await updateAuthEmail({ uid: docId, newEmail: editStudentEmail.trim() });
                 } catch (e: any) {
                     console.error("adminUpdateUserEmail failed", e);
-                    alert("Kunne ikke oppdatere studentens e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
+                    toast.error("Kunne ikke oppdatere studentens e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
                     return;
                 }
             }
@@ -750,7 +775,7 @@ const UsersAdmin: React.FC = () => {
             setStudentModalUser(null);
         } catch (err) {
             console.error("Feil ved lagring av student:", err);
-            alert("Kunne ikke lagre endringer for student.");
+            toast.error("Kunne ikke lagre endringer for student.");
         }
     };
 
@@ -776,12 +801,12 @@ const UsersAdmin: React.FC = () => {
         const phone = editAdminPhone.trim();
 
         if (!email) {
-            alert("E-post må fylles ut for å opprette admin.");
+            toast.error("E-post må fylles ut for å opprette admin.");
             return;
         }
 
         if (!phone) {
-            alert("Mobilnummer må fylles ut for å opprette admin.");
+            toast.error("Mobilnummer må fylles ut for å opprette admin.");
             return;
         }
 
@@ -832,17 +857,18 @@ const UsersAdmin: React.FC = () => {
             setAdminModalMode(null);
             setAdminModalUser(null);
 
-            alert(
-                `Ny admin opprettet.\n\nE-post: ${email}\nMidlertidig passord: ${tempPassword}\n\nGi passordet til admin og be dem bytte etter første innlogging.`
-            );
+            toast.success("Ny admin opprettet", {
+                description: `E‑post: ${email}\nMidlertidig passord: ${tempPassword}\nGi passordet videre og be om passordbytte etter første innlogging.`,
+                duration: 15000,
+            });
         } catch (err: any) {
             console.error("Feil ved oppretting av admin:", err);
             if (err?.code === "auth/email-already-in-use") {
-                alert(
+                toast.error(
                     "E-posten er allerede i bruk i Auth. Bruk en annen eller koble eksisterende bruker."
                 );
             } else {
-                alert("Kunne ikke opprette admin. Se console for mer info.");
+                toast.error("Kunne ikke opprette admin. Se console for mer info.");
             }
         }
     };
@@ -868,7 +894,7 @@ const UsersAdmin: React.FC = () => {
                     await updateAuthEmail({ uid: docId, newEmail: editAdminEmail.trim() });
                 } catch (e: any) {
                     console.error("adminUpdateUserEmail failed", e);
-                    alert("Kunne ikke oppdatere admin‑e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
+                    toast.error("Kunne ikke oppdatere admin‑e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
                     return;
                 }
             }
@@ -898,7 +924,7 @@ const UsersAdmin: React.FC = () => {
             setAdminModalUser(null);
         } catch (err) {
             console.error("Feil ved lagring av admin:", err);
-            alert("Kunne ikke lagre endringer for admin.");
+            toast.error("Kunne ikke lagre endringer for admin.");
         }
     };
 
@@ -2550,6 +2576,93 @@ const TermSetup: React.FC = () => {
         }
     };
 
+    // Modal state for deleting a whole term
+    const [deleteTermModal, setDeleteTermModal] = useState<{
+        open: boolean;
+        termValue: number | null;
+        termLabel: string;
+        reqCount: number;
+        timeCount: number;
+    }>({ open: false, termValue: null, termLabel: "", reqCount: 0, timeCount: 0 });
+
+    // Åpne bekreftelsesmodal for sletting av valgt termin
+    const openDeleteTermModal = () => {
+        if (selectedTerm === "") return;
+        const termValue = selectedTerm as number;
+        const termLabel = labelForTerm(termValue);
+        const reqCount = requirements.filter((r) => r.term === termValue).length;
+        const timeCount = times.filter((t) => t.term === termValue).length;
+        setDeleteTermModal({ open: true, termValue, termLabel, reqCount, timeCount });
+    };
+
+    const cancelDeleteTermModal = () => {
+        setDeleteTermModal({ open: false, termValue: null, termLabel: "", reqCount: 0, timeCount: 0 });
+    };
+
+    // Kjerneoperasjonen for å slette termin + alle krav/timer
+    const performDeleteSelectedTerm = async (termValue: number, termLabel: string) => {
+        try {
+            // Finn term-dokumentet om det finnes i minnet
+            const match = terms.find((t) => t.value === termValue);
+            let termDocRef = match ? doc(db, "terms", match.docId) : null;
+
+            // Hent alle krav og tider fra Firestore for sikkerhets skyld (kan være flere enn lokalt)
+            const reqQ = query(collection(db, "requirements"), where("term", "==", termValue));
+            const timeQ = query(collection(db, "times"), where("term", "==", termValue));
+            const [reqSnap, timeSnap] = await Promise.all([getDocs(reqQ), getDocs(timeQ)]);
+
+            // Fallback: om termDocRef ikke er kjent fra state, slå opp via 'value'
+            if (!termDocRef) {
+                try {
+                    const tQ = query(collection(db, "terms"), where("value", "==", termValue));
+                    const tSnap = await getDocs(tQ);
+                    termDocRef = tSnap.docs[0]?.ref ?? null;
+                } catch {
+                    // ignorer – slett i det minste krav og tider
+                }
+            }
+
+            const refs = [
+                ...reqSnap.docs.map((d) => d.ref),
+                ...timeSnap.docs.map((d) => d.ref),
+            ];
+            if (termDocRef) refs.push(termDocRef);
+
+            // Slett i batcher (Firestore-grense ~500 operasjoner per batch)
+            const CHUNK = 450;
+            for (let i = 0; i < refs.length; i += CHUNK) {
+                const batch = writeBatch(db);
+                refs.slice(i, i + CHUNK).forEach((r) => batch.delete(r));
+                await batch.commit();
+            }
+
+            // Oppdater lokal state
+            setRequirements((prev) => prev.filter((r) => r.term !== termValue));
+            setTimes((prev) => prev.filter((t) => t.term !== termValue));
+            setTerms((prev) => prev.filter((t) => t.value !== termValue));
+            setSelectedTerm("");
+            setIsEditingTermLabel(false);
+            setNewCategoryName("");
+            setEditingReqId(null);
+            setEditingTimeId(null);
+            setEditingTimeName("");
+
+            toast.success("Termin slettet", {
+                description: `${termLabel} er fjernet med alle grupper og timer.`,
+            });
+        } catch (e) {
+            console.error("Kunne ikke slette termin med relaterte data:", e);
+            toast.error("Kunne ikke slette termin. Prøv igjen senere.");
+        } finally {
+            cancelDeleteTermModal();
+        }
+    };
+
+    const confirmDeleteTermModal = async () => {
+        if (!deleteTermModal.open || deleteTermModal.termValue == null) return;
+        await performDeleteSelectedTerm(deleteTermModal.termValue, deleteTermModal.termLabel);
+    };
+
     const handleRenameTime = async (time: TimeDef) => {
         const newName = editingTimeName.trim();
         if (!newName || newName === time.name) {
@@ -2732,18 +2845,65 @@ const TermSetup: React.FC = () => {
         }
     };
 
-    const handleDeleteCategory = async (id: string) => {
-        if (!window.confirm("Er du sikker på at du vil slette denne gruppen for terminen?")) {
+    // Bekreftelsesmodal for sletting av gruppe + tilhørende timer
+    const [deleteGroupModal, setDeleteGroupModal] = useState<{
+        open: boolean;
+        req: { id: string; term: number; category: string } | null;
+        timeCount: number;
+    }>({ open: false, req: null, timeCount: 0 });
+
+    // Felles slettefunksjon slik at vi kan hoppe over advarsel når det ikke finnes timer
+    const performDeleteGroup = async (req: { id: string; term: number; category: string }, timeCountHint?: number) => {
+        const { id, term, category } = req;
+        try {
+            // Finn alle times i denne gruppen for valgt termin
+            const timesQ = query(
+                collection(db, "times"),
+                where("term", "==", term),
+                where("category", "==", category)
+            );
+            const timesSnap = await getDocs(timesQ);
+
+            // Slett requirement + alle relevante times i batcher
+            const refs = [doc(db, "requirements", id), ...timesSnap.docs.map((d) => d.ref)];
+            const CHUNK = 450;
+            for (let i = 0; i < refs.length; i += CHUNK) {
+                const batch = writeBatch(db);
+                refs.slice(i, i + CHUNK).forEach((r) => batch.delete(r));
+                await batch.commit();
+            }
+
+            // Oppdater lokal state
+            setRequirements((prev) => prev.filter((r) => r.id !== id));
+            setTimes((prev) => prev.filter((t) => !(t.term === term && t.category === category)));
+
+            // Kravet sier: "Trenger aldri bekreftelse på at gruppen er slettet" → ingen success-toast
+        } catch (err) {
+            console.error("Feil ved sletting av gruppe og tilhørende timer:", err);
+            toast.error("Kunne ikke slette gruppen. Prøv igjen senere.");
+        } finally {
+            // Lukk ev. modal hvis den var åpen
+            cancelDeleteGroupModal();
+        }
+    };
+
+    const openDeleteGroupModal = (req: { id: string; term: number; category: string }) => {
+        const count = times.filter((t) => t.term === req.term && t.category === req.category).length;
+        if (count === 0) {
+            // Ingen tilhørende timer → ikke vis advarsel, slett direkte
+            void performDeleteGroup(req, 0);
             return;
         }
+        setDeleteGroupModal({ open: true, req, timeCount: count });
+    };
 
-        try {
-            await deleteDoc(doc(db, "requirements", id));
-            setRequirements((prev) => prev.filter((r) => r.id !== id));
-        } catch (err) {
-            console.error("Feil ved sletting av krav:", err);
-            alert("Kunne ikke slette gruppen.");
-        }
+    const cancelDeleteGroupModal = () => {
+        setDeleteGroupModal({ open: false, req: null, timeCount: 0 });
+    };
+
+    const confirmDeleteGroupModal = async () => {
+        if (!deleteGroupModal.req) return;
+        await performDeleteGroup(deleteGroupModal.req, deleteGroupModal.timeCount);
     };
 
     const handleAddTime = async (req: Requirement) => {
@@ -2773,18 +2933,32 @@ const TermSetup: React.FC = () => {
         }
     };
 
-    const handleDeleteTime = async (time: TimeDef) => {
-        const sure = window.confirm(
-            `Slette timen "${time.name}" fra ${labelForTerm(time.term)}? Historiske sesjoner beholdes, men timen forsvinner fra admin-oppsettet.`
-        );
-        if (!sure) return;
+    // Bekreftelsesmodal for sletting av enkelt-time
+    const [deleteTimeModal, setDeleteTimeModal] = useState<{
+        open: boolean;
+        time: TimeDef | null;
+    }>({ open: false, time: null });
 
+    const openDeleteTimeModal = (time: TimeDef) => {
+        setDeleteTimeModal({ open: true, time });
+    };
+
+    const cancelDeleteTimeModal = () => {
+        setDeleteTimeModal({ open: false, time: null });
+    };
+
+    const confirmDeleteTimeModal = async () => {
+        if (!deleteTimeModal.time) return;
+        const time = deleteTimeModal.time;
         try {
             await deleteDoc(doc(db, "times", time.id));
             setTimes((prev) => prev.filter((t) => t.id !== time.id));
+            // Ingen success-toast – samme policy som for grupper
         } catch (err) {
             console.error("Feil ved sletting av time:", err);
-            alert("Kunne ikke slette time.");
+            toast.error("Kunne ikke slette time. Prøv igjen senere.");
+        } finally {
+            cancelDeleteTimeModal();
         }
     };
 
@@ -3138,7 +3312,9 @@ const TermSetup: React.FC = () => {
                                         {/* Slett gruppe */}
                                         <button
                                             type="button"
-                                            onClick={() => handleDeleteCategory(req.id)}
+                                            onClick={() =>
+                                                openDeleteGroupModal({ id: req.id, term: req.term, category: req.category })
+                                            }
                                             style={{
                                                 padding: "0.25rem 0.6rem",
                                                 borderRadius: "999px",
@@ -3254,7 +3430,7 @@ const TermSetup: React.FC = () => {
                                                         {/* Slett-knapp */}
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleDeleteTime(t)}
+                                                            onClick={() => openDeleteTimeModal(t)}
                                                             style={{
                                                                 padding: "0.15rem 0.45rem",
                                                                 borderRadius: "999px",
@@ -3334,6 +3510,242 @@ const TermSetup: React.FC = () => {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Bottom action: delete whole term with all its groups and times */}
+            {selectedTerm !== "" && (
+                <div
+                    style={{
+                        marginTop: "1rem",
+                        display: "flex",
+                        justifyContent: "center",
+                    }}
+                >
+                    <button
+                        type="button"
+                        onClick={openDeleteTermModal}
+                        style={{
+                            padding: "0.5rem 0.9rem",
+                            borderRadius: "999px",
+                            border: "none",
+                            backgroundColor: "#ef4444",
+                            color: "#ffffff",
+                            fontSize: "0.9rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Slett termin
+                    </button>
+                </div>
+            )}
+
+            {/* Modal: Bekreft sletting av termin */}
+            {deleteTermModal.open && deleteTermModal.termValue != null && (
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(0,0,0,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "1rem",
+                        zIndex: 1000,
+                    }}
+                >
+                    <div
+                        className="page-card"
+                        style={{
+                            maxWidth: 520,
+                            width: "100%",
+                            background: "#ffffff",
+                        }}
+                    >
+                        <h3 style={{ marginTop: 0 }}>Slett termin?</h3>
+                        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                            {`Du er i ferd med å slette «${deleteTermModal.termLabel}».\n\n`}
+                            {`Dette vil slette selve terminen, alle grupper/krav (${deleteTermModal.reqCount}) og alle timer (${deleteTermModal.timeCount}) som tilhører denne terminen.\n`}
+                            {`Handlingen kan ikke angres.`}
+                        </p>
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: "0.5rem",
+                                justifyContent: "flex-end",
+                                marginTop: "0.75rem",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={cancelDeleteTermModal}
+                                style={{
+                                    padding: "0.45rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    background: "#ffffff",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void confirmDeleteTermModal()}
+                                style={{
+                                    padding: "0.45rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    background: "#ef4444",
+                                    color: "#ffffff",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Slett termin
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal: Bekreft sletting av gruppe */}
+            {deleteGroupModal.open && deleteGroupModal.req && (
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(0,0,0,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "1rem",
+                        zIndex: 1000,
+                    }}
+                >
+                    <div
+                        className="page-card"
+                        style={{
+                            maxWidth: 520,
+                            width: "100%",
+                            background: "#ffffff",
+                        }}
+                    >
+                        <h3 style={{ marginTop: 0 }}>Slett gruppe?</h3>
+                        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                            {`Du er i ferd med å slette gruppen «${deleteGroupModal.req.category}».\n\n`}
+                            {`Dette vil også slette alle tilhørende timer i denne gruppen for valgt termin (${deleteGroupModal.timeCount}).\n`}
+                            {`Handlingen kan ikke angres.`}
+                        </p>
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: "0.5rem",
+                                justifyContent: "flex-end",
+                                marginTop: "0.75rem",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={cancelDeleteGroupModal}
+                                style={{
+                                    padding: "0.45rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    background: "#ffffff",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void confirmDeleteGroupModal()}
+                                style={{
+                                    padding: "0.45rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    background: "#ef4444",
+                                    color: "#ffffff",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Slett gruppe
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Bekreft sletting av time */}
+            {deleteTimeModal.open && deleteTimeModal.time && (
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(0,0,0,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "1rem",
+                        zIndex: 1000,
+                    }}
+                >
+                    <div
+                        className="page-card"
+                        style={{
+                            maxWidth: 520,
+                            width: "100%",
+                            background: "#ffffff",
+                        }}
+                    >
+                        <h3 style={{ marginTop: 0 }}>Slett time?</h3>
+                        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
+                            {`Du er i ferd med å slette timen «${deleteTimeModal.time.name}» i gruppen «${deleteTimeModal.time.category}» for ${labelForTerm(deleteTimeModal.time.term)}.\n\n`}
+                            {`Historiske sesjoner beholdes, men timen forsvinner fra admin-oppsettet.\n`}
+                            {`Handlingen kan ikke angres.`}
+                        </p>
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: "0.5rem",
+                                justifyContent: "flex-end",
+                                marginTop: "0.75rem",
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={cancelDeleteTimeModal}
+                                style={{
+                                    padding: "0.45rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    background: "#ffffff",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void confirmDeleteTimeModal()}
+                                style={{
+                                    padding: "0.45rem 0.9rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    background: "#ef4444",
+                                    color: "#ffffff",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Slett time
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </section>
@@ -3613,8 +4025,7 @@ const AdminPage: React.FC = () => {
                             color: "#6b7280",
                         }}
                     >
-                        Oppsett av krav per termin, administrasjon av brukere og
-                        forhåndsvisning for lærere.
+                        Oppsett av oppmø og administrasjon av brukere.
                     </p>
 
                     {/* Øverste knapper: Oppmøtebøker / Brukere */}

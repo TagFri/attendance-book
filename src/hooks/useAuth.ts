@@ -7,7 +7,7 @@ import {
     createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { db } from "../firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, updateDoc} from "firebase/firestore";
 
 export type AppUser = {
     uid: string;
@@ -59,9 +59,22 @@ export function useAuth() {
 
                 const data = snap.data() as any;
 
+                // Sync Firestore user email with Auth email on successful login
+                // If the email in Auth has changed (e.g., via verification link), update the user doc
+                let effectiveEmail: string = data?.email ?? fbUser.email ?? "";
+                if (fbUser.email && data?.email !== fbUser.email) {
+                    try {
+                        await updateDoc(ref, { email: fbUser.email });
+                        effectiveEmail = fbUser.email;
+                    } catch (e) {
+                        // Non-fatal: just log; we still proceed with in-memory value
+                        console.warn("Kunne ikke synkronisere e‑post til Firestore:", e);
+                    }
+                }
+
                 const appUser: AppUser = {
                     uid: fbUser.uid,
-                    email: data?.email ?? fbUser.email ?? "",
+                    email: effectiveEmail,
                     role: (data?.role as any) ?? "student",
                     term: data?.term ?? null,
                     termLabel: data?.termLabel ?? null,

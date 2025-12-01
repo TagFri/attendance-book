@@ -16,11 +16,13 @@ import {
     where,
     orderBy,
     limit,
+    deleteDoc,
 } from "firebase/firestore";
 import { QRCodeCanvas } from "qrcode.react";
 import LoadingSpinner from "./LoadingSpinner";
 import { useTermOptions, labelFromTerm } from "./terms";
 import ProfileModal from "./ProfileModal";
+import { toast } from "sonner";
 
 type TeacherPageProps = {
     user: AppUser;
@@ -313,13 +315,15 @@ function TeacherPage({ user }: TeacherPageProps) {
     const filteredStudents = useMemo(() => {
         const q = studentSearch.trim().toLowerCase();
         if (!q || !activeSession) return [];
+        const queryHasAt = q.includes("@");
         return students
             .filter((s) => {
                 // strengt kun samme termin som aktiv økt
                 if (s.term !== activeSession.term) return false;
-                const name = (s.name ?? "").toLowerCase();
-                const email = s.email.toLowerCase();
-                const phone = (s.phone ?? "").toLowerCase();
+                const name = String(s.name ?? "").toLowerCase();
+                const rawEmail = String(s.email ?? "").toLowerCase();
+                const email = queryHasAt ? rawEmail : rawEmail.split("@")[0] ?? rawEmail;
+                const phone = String(s.phone ?? "").toLowerCase();
                 return (
                     name.includes(q) || email.includes(q) || phone.includes(q)
                 );
@@ -478,7 +482,7 @@ function TeacherPage({ user }: TeacherPageProps) {
             );
             const existing = await getDoc(attRef);
             if (existing.exists()) {
-                alert("Studenten er allerede registrert på denne økten.");
+                toast.error("Studenten er allerede registrert på denne økten.");
                 return;
             }
 
@@ -497,8 +501,29 @@ function TeacherPage({ user }: TeacherPageProps) {
             setShowStudentSuggestions(false);
         } catch (err) {
             console.error(err);
-            alert("Kunne ikke legge til student manuelt.");
+            toast.error("Kunne ikke legge til student manuelt.");
         }
+    };
+
+    // Fjern registrert student fra aktiv økt (etter bekreftelse via toast)
+    const handleRemoveAttendee = (row: AttendanceRow) => {
+        if (!activeSession) return;
+        const label = row.studentName || row.studentEmail || "denne studenten";
+        toast.warning(`Fjerne ${label} fra økten?`, {
+            action: {
+                label: "Bekreft",
+                onClick: async () => {
+                    try {
+                        await deleteDoc(doc(db, "sessions", activeSession.id, "attendance", row.id));
+                        toast.success("Student fjernet fra økten.");
+                    } catch (e) {
+                        console.error(e);
+                        toast.error("Kunne ikke fjerne studenten.");
+                    }
+                },
+            },
+            description: "Trykk bekreft for å fjerne",
+        });
     };
 
     if (loading)
@@ -967,6 +992,16 @@ function TeacherPage({ user }: TeacherPageProps) {
                                 >
                                     Tidspunkt
                                 </th>
+                                <th
+                                    style={{
+                                        textAlign: "right",
+                                        borderBottom: "1px solid #e5e7eb",
+                                        padding: "0.3rem",
+                                        width: 40,
+                                    }}
+                                >
+                                    
+                                </th>
                             </tr>
                             </thead>
                             <tbody>
@@ -1005,6 +1040,44 @@ function TeacherPage({ user }: TeacherPageProps) {
                                                 second: "2-digit",
                                             })
                                             : "-"}
+                                    </td>
+                                    <td
+                                        style={{
+                                            padding: "0.3rem",
+                                            borderBottom: "1px solid #f3f4f6",
+                                            textAlign: "right",
+                                        }}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveAttendee(a)}
+                                            aria-label="Fjern student fra økten"
+                                            title="Fjern student"
+                                            style={{
+                                                background: "transparent",
+                                                border: "none",
+                                                cursor: "pointer",
+                                                color: "#b91c1c",
+                                                padding: "0.15rem",
+                                            }}
+                                        >
+                                            {/* liten rødt kryss ikon */}
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                width="16"
+                                                height="16"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                aria-hidden
+                                            >
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                            </svg>
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
