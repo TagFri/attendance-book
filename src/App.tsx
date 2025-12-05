@@ -112,7 +112,7 @@ function App() {
             <>
                 <div id="main">
                     <div id="loginMan">
-                        <img src="/logo.svg" alt="Logo" className=""/>
+                        <img src="/login-man.svg" alt="Logo" className=""/>
                     </div>
                     <div className="card round-corners-full login-card">
                         <h1>Velkommen tilbake</h1>

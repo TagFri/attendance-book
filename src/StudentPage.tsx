@@ -13,6 +13,7 @@ import {
     Timestamp,
 } from "firebase/firestore";
 import QrScanner from "./QrScanner";
+import ErrorBoundary from "./ErrorBoundary";
 import {useTermOptions, labelFromTerm} from "./terms";
 import LoadingSpinner from "./LoadingSpinner";
 import OtpInput from "./OtpInput";
@@ -157,8 +158,20 @@ function StudentPage({user}: StudentPageProps) {
         const numeric = text.replace(/\D/g, "").slice(0, 6);
         if (numeric.length === 6) {
             setCode(numeric);
+            // Lukk QR-modalen når vi har funnet en gyldig kode
+            setScanning(false);
             void registerAttendance(numeric);
         }
+    };
+
+    // Håndter feil fra QR-skanner
+    const handleScannerError = (err: unknown) => {
+        console.warn("QR-skanner-feil:", err);
+        setScanning(false);
+        setStatus("error");
+        setStatusMessage(
+            "Kunne ikke starte kamera. Sjekk kameratilgang i nettleseren eller skriv inn oppmøtekoden manuelt."
+        );
     };
 
     // Hent statistikk for studentens termin
@@ -333,7 +346,7 @@ function StudentPage({user}: StudentPageProps) {
     useEffect(() => {
         if (status === "idle") return;
 
-        const timeoutMs = status === "success" ? 10000 : 10000;
+        const timeoutMs = status === "success" ? 10000 : 2000;
         const t = setTimeout(() => {
             resetToIdle();
         }, timeoutMs);
@@ -403,16 +416,64 @@ function StudentPage({user}: StudentPageProps) {
 
                         <button
                             type="button"
-                            onClick={() => setScanning((s) => !s)}
+                            onClick={() => setScanning(true)}
                             className="button-colorless fontUnderline boldFont QRbutton"
                         >
-                            {scanning ? "Stopp skanning" : "Skann QR-kode"}
+                            Skann QR-kode
                         </button>
 
                         {scanning && (
-                            <div className="mt-0_8 flex justify-center">
-                                <div className="w-260px maxw-full rounded-lg overflow-hidden border-gray">
-                                    <QrScanner onCode={handleQrResult}/>
+                            <div
+                                style={{
+                                    position: "fixed",
+                                    inset: 0,
+                                    backgroundColor: "rgba(15,23,42,0.35)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    zIndex: 60,
+                                }}
+                                onClick={() => setScanning(false)}
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Skann QR-kode"
+                            >
+                                <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                        width: "100%",
+                                        maxWidth: "480px",
+                                        backgroundColor: "#ffffff",
+                                        borderRadius: "1rem",
+                                        padding: "1rem 1.25rem",
+                                        boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                                    }}
+                                >
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                                        <h3 style={{ margin: 0 }}>Skann QR-kode</h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => setScanning(false)}
+                                            style={{
+                                                border: "none",
+                                                background: "transparent",
+                                                fontSize: "1.2rem",
+                                                cursor: "pointer",
+                                            }}
+                                            aria-label="Lukk"
+                                            title="Lukk"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                    <div style={{ borderRadius: "0.75rem", overflow: "hidden", border: "1px solid #e5e7eb" }}>
+                                        <ErrorBoundary
+                                            onError={(error) => handleScannerError(error)}
+                                            resetKey={scanning}
+                                        >
+                                            <QrScanner onCode={handleQrResult} onError={handleScannerError} />
+                                        </ErrorBoundary>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -520,7 +581,11 @@ function StudentPage({user}: StudentPageProps) {
                                 boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
                             }}
                         >
-                            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+                            <div style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center"
+                            }}>
                                 <h3 style={{margin: 0}}>
                                     {groupModalCategory ? `Oppmøte i ${groupModalCategory}` : "Oppmøte"}
                                 </h3>
