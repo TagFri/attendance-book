@@ -19,11 +19,11 @@ function App() {
     const [authSuccess, setAuthSuccess] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [sendingReset, setSendingReset] = useState(false);
-    
+
     // Refs to manage field focus
     const emailRef = useRef<HTMLInputElement | null>(null);
     const passwordRef = useRef<HTMLInputElement | null>(null);
-    
+
     // Auto-clear auth messages after 3 seconds
     useEffect(() => {
         if (!authError) return;
@@ -41,7 +41,7 @@ function App() {
     useEffect(() => {
         if (user) {
             try {
-                window.scrollTo({ top: 0, behavior: "smooth" });
+                window.scrollTo({top: 0, behavior: "smooth"});
             } catch {
                 // fallback for environments without smooth scroll support
                 window.scrollTo(0, 0);
@@ -111,61 +111,63 @@ function App() {
         return (
             <>
                 <div id="main">
-                    <div id="loginMan">
-                        <img src="/login-man.svg" alt="Logo" className=""/>
-                    </div>
-                    <div className="card round-corners-full login-card">
-                        <h1>Velkommen tilbake</h1>
-                        <form onSubmit={handleSubmit}>
-                            <div className="input-group">
-                                <label className="input-label">Mobil / epost</label>
-                                <input className="input-field round-corners-half"
-                                       type="email"
-                                       value={email}
-                                       onChange={(e) => setEmail(e.target.value)}
-                                       ref={emailRef}
-                                       onKeyDown={(e) => {
-                                           if (e.key === "Enter") {
-                                               e.preventDefault();
-                                               passwordRef.current?.focus();
-                                           }
-                                       }}
-                                       enterKeyHint="next"
-                                />
-                            </div>
-                            <div className="input-group">
-                                <label className="input-label">Passord</label>
-                                <input className="input-field round-corners-half"
-                                       type="password"
-                                       value={password}
-                                       onChange={(e) => setPassword(e.target.value)}
-                                       ref={passwordRef}
-                                       enterKeyHint="go"
-                                />
-                            </div>
+                    <div className="login-card-container">
+                        <div id="loginMan">
+                            <img src="/login-man.svg" alt="Logo" className=""/>
+                        </div>
+                        <div className="card round-corners-full login-card">
+                            <h1>Velkommen tilbake</h1>
+                            <form onSubmit={handleSubmit}>
+                                <div className="input-group">
+                                    <label className="input-label">Mobil / epost</label>
+                                    <input className="input-field round-corners-half"
+                                           type="email"
+                                           value={email}
+                                           onChange={(e) => setEmail(e.target.value)}
+                                           ref={emailRef}
+                                           onKeyDown={(e) => {
+                                               if (e.key === "Enter") {
+                                                   e.preventDefault();
+                                                   passwordRef.current?.focus();
+                                               }
+                                           }}
+                                           enterKeyHint="next"
+                                    />
+                                </div>
+                                <div className="input-group">
+                                    <label className="input-label">Passord</label>
+                                    <input className="input-field round-corners-half"
+                                           type="password"
+                                           value={password}
+                                           onChange={(e) => setPassword(e.target.value)}
+                                           ref={passwordRef}
+                                           enterKeyHint="go"
+                                    />
+                                </div>
 
-                            <button
-                                type="submit"
-                                disabled={submitting}
-                                className="button-primary button-black round-corners-half"
-                            >
-                                {submitting ? "Logger inn..." : "Logg inn"}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleForgotPassword}
-                                disabled={sendingReset}
-                                className="button-colorless boldFont"
-                            >
-                                {sendingReset ? "Sender e‑post..." : "Glemt passord"}
-                            </button>
-                            <p className="errorTxt"><br/>
-                                {authError}
-                            </p>
-                            <p className="successTxt"><br/>
-                                {authSuccess}
-                            </p>
-                        </form>
+                                <button
+                                    type="submit"
+                                    disabled={submitting}
+                                    className="button-primary button-black round-corners-half"
+                                >
+                                    {submitting ? "Logger inn..." : "Logg inn"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleForgotPassword}
+                                    disabled={sendingReset}
+                                    className="button-colorless boldFont"
+                                >
+                                    {sendingReset ? "Sender e‑post..." : "Glemt passord"}
+                                </button>
+                                <p className="errorTxt"><br/>
+                                    {authError}
+                                </p>
+                                <p className="successTxt"><br/>
+                                    {authSuccess}
+                                </p>
+                            </form>
+                        </div>
                     </div>
                 </div>
                 <Footer/>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { AppUser } from "./hooks/useAuth";
 import { db } from "./firebase";
 import { useAuth } from "./hooks/useAuth";
@@ -605,597 +605,344 @@ function TeacherPage({ user }: TeacherPageProps) {
         }
     };
 
-    if (loading)
-        return (
-            <div className="page-card page-card--teacher">
-                <LoadingSpinner />
-            </div>
-        );
-
     return (
         <>
-        <div className="page-card page-card--teacher">
-            {/* Topp: navn + min profil + logg ut */}
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "0.75rem",
-                }}
-            >
-                <div style={{ fontWeight: 600 }}>
-                    {user.displayName || user.email}
+            <div className="card teacher-card-top round-border-top">
+                <div className="studentInfo">
+                    <h2>{user.displayName || user.email}</h2>
+                    <p className="thinFont smallText opaqueFont">Underviser</p>
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button className="btn-hover-lg"
-                        type="button"
-                        onClick={() => setShowProfile(true)}
-                        style={{
-                            padding: "0.35rem 0.9rem",
-                            borderRadius: "999px",
-                            border: "1px solid #d1d5db",
-                            background: "#ffffff",
-                            cursor: "pointer",
-                            fontSize: "0.85rem",
-                        }}
-                    >
-                        Min profil
-                    </button>
-                    <button className="btn-hover-lg"
-                        onClick={logout}
-                        type="button"
-                        style={{
-                            padding: "0.35rem 0.9rem",
-                            borderRadius: "999px",
-                            border: "1px solid #d1d5db",
-                            background: "#ffffff",
-                            cursor: "pointer",
-                            fontSize: "0.85rem",
-                        }}
-                    >
-                        Logg ut
-                    </button>
-                </div>
+                <img src="/card-man.svg" alt="Student-profile-placeholder"/>
             </div>
+            <div className="card teacher-card-bottom round-border-bottom">
+                <h2>
+                    Registrer oppmøte
+                </h2>
 
-            <h2 style={{
-                textAlign: "center",
-                margin: "4rem 0 3rem" }}>
-                Registrer oppmøte
-            </h2>
+                {/* Termin øverst, time under */}
+                <section style={{
+                    marginTop: "1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{
+                        marginBottom: "1.25rem", width: "100%", maxWidth: 520 }}>
+                        {(() => {
+                            // Bygg liste over valgbare terminer
+                            const allowedSet =
+                                allowedTerms !== null
+                                    ? new Set(allowedTerms ?? [])
+                                    : null; // null = ikke lastet enda → vis alle midlertidig
+                            const options = allowedSet
+                                ? termOptions.filter((o) => allowedSet.has(o.value))
+                                : termOptions;
 
-            {/* Termin øverst, time under */}
-            <section style={{
-                marginTop: "1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div style={{
-                    marginBottom: "1.25rem", width: "100%", maxWidth: 520 }}>
-                    {(() => {
-                        // Bygg liste over valgbare terminer
-                        const allowedSet =
-                            allowedTerms !== null
-                                ? new Set(allowedTerms ?? [])
-                                : null; // null = ikke lastet enda → vis alle midlertidig
-                        const options = allowedSet
-                            ? termOptions.filter((o) => allowedSet.has(o.value))
-                            : termOptions;
-
-                        if (options.length === 0) {
-                            return (
-                                <div
-                                    style={{
-                                        width: "100%",
-                                        padding: "0.6rem 0",
-                                        fontSize: "16px",
-                                        border: "1px solid #e5e7eb",
-                                        borderRadius: "0.5rem",
-                                        background: "#f9fafb",
-                                        color: "#6b7280",
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    Ingen terminer tilgjengelig
-                                </div>
-                            );
-                        }
-
-                        return (
-                            <select
-                                value={selectedTerm ?? ""}
-                                onChange={(e) => {
-                                    const raw = e.target.value;
-                                    const val = raw === "" ? null : parseInt(raw, 10);
-                                    setSelectedTerm(val);
-                                    setSearchTerm("");
-                                    setShowSuggestions(false);
-                                    setActiveSession(null);
-                                    setAttendees([]);
-                                    // Etter valg av termin: fokuser time-input for rask skriving (mobil/desktop)
-                                    if (val != null) {
-                                        setTimeout(() => {
-                                            searchInputRef.current?.focus();
-                                        }, 0);
-                                    }
-                                }}
-                                style={{
-                                    width: "100%",
-                                    padding: "0.6rem 0.75rem",
-                                    fontSize: "16px",
-                                    textAlign: "center",
-                                    borderRadius: "0.5rem",
-                                    border: "solid 1px"
-                                }}
-                            >
-                                <option value="" disabled>
-                                    Velg modul
-                                </option>
-                                {options.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                    </option>
-                                ))}
-                            </select>
-                        );
-                    })()}
-                </div>
-
-                <div style={{ position: "relative", marginBottom: "0.75rem", width: "100%", maxWidth: 520 }}>
-                    <input
-                        ref={searchInputRef}
-                        value={searchTerm}
-                        onChange={(e) => {
-                            setSearchTerm(e.target.value);
-                            setShowSuggestions(true);
-                        }}
-                        onFocus={() => {
-                            if (selectedTerm && searchTerm.trim().length > 0) setShowSuggestions(true);
-                        }}
-                        placeholder={selectedTerm ? "Start å skrive navnet på timen..." : "Velg modul først"}
-                        disabled={!selectedTerm}
-                        style={{
-                            width: "100%",
-                            padding: "0.6rem 0rem",
-                            fontSize: "16px",
-                            textAlign: "center",
-                            borderRadius: "0.5rem",
-                            border: "solid 1px",
-                            opacity: !selectedTerm ? 0.6 : 1 }}
-                    />
-
-                    {/* Dropdown-forslag under input */}
-                    {showSuggestions && filteredTimes.length > 0 && (
-                        <ul
-                            style={{
-                                position: "absolute",
-                                top: "100%",
-                                left: 0,
-                                right: 0,
-                                zIndex: 10,
-                                background: "white",
-                                border: "1px solid #e5e7eb",
-                                borderRadius: "0.5rem",
-                                marginTop: "0.2rem",
-                                listStyle: "none",
-                                padding: 0,
-                                maxHeight: "220px",
-                                overflowY: "auto",
-                                boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
-                            }}
-                        >
-                            {filteredTimes.map((t) => (
-                                <li
-                                    key={t.id}
-                                    onClick={() => handleSuggestionClick(t)}
-                                    style={{
-                                        padding: "0.4rem 0.6rem",
-                                        cursor: "pointer",
-                                        borderBottom: "1px solid #f3f4f6",
-                                    }}
-                                    onMouseDown={(e) => e.preventDefault()} // unngå blur før click
-                                >
-                                    <div>{t.name}</div>
+                            if (options.length === 0) {
+                                return (
                                     <div
                                         style={{
-                                            fontSize: "0.75rem",
+                                            width: "100%",
+                                            padding: "0.6rem 0",
+                                            fontSize: "16px",
+                                            border: "1px solid #e5e7eb",
+                                            borderRadius: "0.5rem",
+                                            background: "#f9fafb",
                                             color: "#6b7280",
+                                            textAlign: "center",
                                         }}
                                     >
-                                        {t.category}
+                                        Ingen terminer tilgjengelig
                                     </div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            </section>
+                                );
+                            }
 
-            {/* Nylig registrerte timer (kun når ingen aktiv økt) */}
-            {!activeSession && recentTimes.length > 0 && (
-                <section style={{
-                    marginTop: "1.5rem",
-                    display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <div style={{ width: "100%", maxWidth: 520 }}>
-                        <h4 style={{ textAlign: "center", marginTop: 0 }}>Nylig registrerte timer</h4>
-                        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                            {recentTimes.map((it) => (
-                                <li key={it.timeId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid #f3f4f6" }}>
-                                    <div>
-                                        <div style={{ fontWeight: 600 }}>{it.name}</div>
-                                        <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                                            {it.category} · {labelFromTerm(termOptions, it.term)}
+                            return (
+                                <select
+                                    value={selectedTerm ?? ""}
+                                    onChange={(e) => {
+                                        const raw = e.target.value;
+                                        const val = raw === "" ? null : parseInt(raw, 10);
+                                        setSelectedTerm(val);
+                                        setSearchTerm("");
+                                        setShowSuggestions(false);
+                                        setActiveSession(null);
+                                        setAttendees([]);
+                                        // Etter valg av termin: fokuser time-input for rask skriving (mobil/desktop)
+                                        if (val != null) {
+                                            setTimeout(() => {
+                                                searchInputRef.current?.focus();
+                                            }, 0);
+                                        }
+                                    }}
+                                    className="input-field input-full"
+                                >
+                                    <option value="" disabled>
+                                        Velg modul
+                                    </option>
+                                    {options.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            );
+                        })()}
+                    </div>
+
+                    <div style={{ position: "relative", marginBottom: "0.75rem", width: "100%", maxWidth: 520 }}>
+                        <input
+                            ref={searchInputRef}
+                            value={searchTerm}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setShowSuggestions(true);
+                            }}
+                            onFocus={() => {
+                                if (selectedTerm && searchTerm.trim().length > 0) setShowSuggestions(true);
+                            }}
+                            placeholder={selectedTerm ? "Start å skrive navnet på timen..." : "Velg modul først"}
+                            disabled={!selectedTerm}
+                            className="input-field input-full"
+                        />
+
+                        {/* Dropdown-forslag under input */}
+                        {showSuggestions && filteredTimes.length > 0 && (
+                            <ul
+                                style={{
+                                    position: "absolute",
+                                    top: "100%",
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 10,
+                                    background: "white",
+                                    border: "1px solid #e5e7eb",
+                                    borderRadius: "0.5rem",
+                                    marginTop: "0.2rem",
+                                    listStyle: "none",
+                                    padding: 0,
+                                    maxHeight: "220px",
+                                    overflowY: "auto",
+                                    boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+                                }}
+                            >
+                                {filteredTimes.map((t) => (
+                                    <li
+                                        key={t.id}
+                                        onClick={() => handleSuggestionClick(t)}
+                                        style={{
+                                            padding: "0.4rem 0.6rem",
+                                            cursor: "pointer",
+                                            borderBottom: "1px solid #f3f4f6",
+                                        }}
+                                        onMouseDown={(e) => e.preventDefault()} // unngå blur før click
+                                    >
+                                        <div>{t.name}</div>
+                                        <div
+                                            style={{
+                                                fontSize: "0.75rem",
+                                                color: "#6b7280",
+                                            }}
+                                        >
+                                            {t.category}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                    {/* Nylig registrerte timer (kun når ingen aktiv økt) */}
+                    {!activeSession && recentTimes.length > 0 && (
+                        <section style={{
+                            marginTop: "1.5rem",
+                            display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <div style={{ width: "100%", maxWidth: 520 }}>
+                                <h4 style={{ textAlign: "center", marginTop: 0 }}>Nylig registrerte timer</h4>
+                                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                                    {recentTimes.map((it) => (
+                                        <li key={it.timeId} style={{ display: "flex", alignItems: "left", justifyContent: "start", padding: "0.5rem 0", borderBottom: "1px solid #f3f4f6" }}>
+                                            <div>
+                                                <div>{labelFromTerm(termOptions, it.term)}</div>
+                                                <div>
+                                                    {it.name}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleOpenRecent(it)}
+                                                className="button-small button-black"
+                                            >
+                                                Åpne
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </section>
+                    )}
+                </section>
+
+                {activeSession && (
+                        <section
+                            ref={sessionRef}
+                            style={{
+                                marginTop: "2rem",
+                                padding: "1rem",
+                            }}
+                        >
+
+                            {/* QR + kode under (blurred if session is closed) */}
+                            <div style={{ marginTop: "1rem", position: "relative" }}>
+                                <div
+                                    style={{
+                                        filter: activeSession.isOpen === false ? "blur(6px)" : "none",
+                                        pointerEvents: "none",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        alignItems: "center",
+                                        gap: "0.5rem",
+                                    }}
+                                >
+                                    <QRCodeCanvas
+                                        value={activeSession.code}
+                                        size={160}
+                                    />
+                                    <div
+                                        style={{
+                                            fontSize: "2rem",
+                                            fontWeight: "bold",
+                                            letterSpacing: "0.3em",
+                                        }}
+                                    >
+                                        {activeSession.code}
+                                    </div>
+                                </div>
+                                {activeSession.isOpen === false && (
+                                    <div
+                                        style={{
+                                            position: "absolute",
+                                            inset: 0,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                background: "rgba(255,255,255,0.85)",
+                                                padding: "0.5rem 0.75rem",
+                                                borderRadius: "0.5rem",
+                                                border: "1px solid #e5e7eb",
+                                                fontWeight: 600,
+                                                color: "#6b7280",
+                                            }}
+                                        >
+                                            Økten er lukket
                                         </div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleOpenRecent(it)}
-                                        style={{
-                                            padding: "0.35rem 0.9rem",
-                                            borderRadius: "999px",
-                                            border: "none",
-                                            background: "#6CE1AB",
-                                            color: "black",
-                                            cursor: "pointer" }}
-                                    >
-                                        Åpne
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </section>
-            )}
-        </div>
+                                )}
+                            </div>
+
+                            {/* Nedtelling over knappen, begge sentrert */}
+                            <div
+                                style={{
+                                    marginTop: "1.2rem",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "0.5rem",
+                                }}
+                            >
+                                <div style={{ fontWeight: 600, color: "#111827" }}>
+                                    {formatSeconds(remainingSeconds)}
+                                </div>
+                                <button
+                                    onClick={handleCloseSession}
+                                    className="button-black button-small"
+                                >
+                                    {activeSession.isOpen === false ? "Åpne økta" : "Lukk økt"}
+                                </button>
+                            </div>
+
+                            <hr style={{ margin: "1rem 0" }} />
+
+                            <h4>Registrerte studenter</h4>
+                            {attendees.length === 0 ? (
+                                <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
+                                    Ingen har registrert seg ennå.
+                                </p>
+                            ) : (
+                                <table
+                                    style={{ width: "100%", borderCollapse: "collapse" }}
+                                >
+                                    <tbody>
+                                    {attendees.map((a) => (
+                                        <tr key={a.id}>
+                                            <td
+                                                style={{
+                                                    padding: "0.3rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {a.studentName || "-"}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.3rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                            >
+                                                {a.studentEmail?.split("@")[0]|| "-"}
+                                            </td>
+                                            <td
+                                                style={{
+                                                    padding: "0.3rem",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                    textAlign: "right",
+                                                }}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveAttendee(a)}
+                                                    aria-label="Fjern student fra økten"
+                                                    title="Fjern student"
+                                                    style={{
+                                                        background: "transparent",
+                                                        border: "none",
+                                                        cursor: "pointer",
+                                                        color: "#b91c1c",
+                                                        padding: "0.15rem",
+                                                    }}
+                                                >
+                                                    {/* liten rødt kryss ikon */}
+                                                    <svg
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        width="16"
+                                                        height="16"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        aria-hidden
+                                                    >
+                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                    </svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </section>
+                    )}
+            </div>
+
             <br />
             <div className="page-card page-card--session"
             style={{
                 display: activeSession ? undefined : "none"
             }}>
-
-            {activeSession && (
-                <section
-                    ref={sessionRef}
-                    style={{
-                        marginTop: "2rem",
-                        padding: "1rem",
-                        background: "#f9fafb",
-                    }}
-                >
-                    {/* Termin / time / gruppe sentrert */}
-                    <div style={{ textAlign: "center" }}>
-                        <h3 style={{ marginTop: 0, marginBottom: "0.25rem" }}>
-                            {labelFromTerm(termOptions, activeSession.term)}
-                        </h3>
-                        <p style={{ margin: 0 }}>
-                            <strong>Time:</strong> {activeSession.name}
-                        </p>
-                        <p style={{ marginTop: "0.2rem" }}>
-                            <strong>Gruppe:</strong> {activeSession.category}
-                        </p>
-                    </div>
-
-                    {/* QR + kode under (blurred if session is closed) */}
-                    <div style={{ marginTop: "1rem", position: "relative" }}>
-                        <div
-                            style={{
-                                filter: activeSession.isOpen === false ? "blur(6px)" : "none",
-                                pointerEvents: "none",
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                            }}
-                        >
-                            <QRCodeCanvas
-                                value={activeSession.code}
-                                size={160}
-                                bgColor="#f9fafb"
-                                includeMargin={true}
-                            />
-                            <div
-                                style={{
-                                    fontSize: "2rem",
-                                    fontWeight: "bold",
-                                    letterSpacing: "0.3em",
-                                }}
-                            >
-                                {activeSession.code}
-                            </div>
-                        </div>
-                        {activeSession.isOpen === false && (
-                            <div
-                                style={{
-                                    position: "absolute",
-                                    inset: 0,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        background: "rgba(255,255,255,0.85)",
-                                        padding: "0.5rem 0.75rem",
-                                        borderRadius: "0.5rem",
-                                        border: "1px solid #e5e7eb",
-                                        fontWeight: 600,
-                                        color: "#6b7280",
-                                    }}
-                                >
-                                    Økten er lukket
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Manuell registrering av student */}
-                    <div style={{ marginTop: "1.5rem" }}>
-                        <h4 style={{ textAlign: "center", marginBottom: "0.3rem" }}>
-                            Legg til student manuelt
-                        </h4>
-                        <p
-                            style={{
-                                fontSize: "0.8rem",
-                                color: "#6b7280",
-                                textAlign: "center",
-                                marginTop: 0,
-                                marginBottom: "0.5rem",
-                            }}
-                        >
-                            Brukes dersom en student ikke kan skanne eller skrive inn kode.
-                        </p>
-
-                        {studentsLoading && (
-                            <div style={{ display: "flex", justifyContent: "center" }}>
-                                <LoadingSpinner />
-                            </div>
-                        )}
-
-                        <div
-                            style={{
-                                position: "relative",
-                                maxWidth: "360px",
-                                margin: "0 auto",
-                            }}
-                        >
-                            <input
-                                value={studentSearch}
-                                onChange={(e) => {
-                                    setStudentSearch(e.target.value);
-                                    setShowStudentSuggestions(true);
-                                }}
-                                onFocus={() => {
-                                    if (studentSearch.trim().length > 0) {
-                                        setShowStudentSuggestions(true);
-                                    }
-                                }}
-                                placeholder={
-                                    studentsLoading
-                                        ? "Laster studenter..."
-                                        : "Søk på navn, e-post eller telefon"
-                                }
-                                disabled={studentsLoading}
-                                style={{
-                                    width: "100%",
-                                    padding: "0.6rem 0.75rem",
-                                    fontSize: "16px",
-                                    borderRadius: "0.5rem",
-                                    border: "1px solid #d1d5db",
-                                    textAlign: "center",
-                                }}
-                            />
-
-                            {showStudentSuggestions &&
-                                filteredStudents.length > 0 && (
-                                    <ul
-                                        style={{
-                                            position: "absolute",
-                                            top: "100%",
-                                            left: 0,
-                                            right: 0,
-                                            zIndex: 20,
-                                            background: "white",
-                                            border: "1px solid #e5e7eb",
-                                            borderRadius: "0.5rem",
-                                            marginTop: "0.2rem",
-                                            listStyle: "none",
-                                            padding: 0,
-                                            maxHeight: "220px",
-                                            overflowY: "auto",
-                                            boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
-                                        }}
-                                    >
-                                        {filteredStudents.map((s) => (
-                                            <li
-                                                key={s.id}
-                                                onClick={() => handleAddStudentManually(s)}
-                                                style={{
-                                                    padding: "0.4rem 0.6rem",
-                                                    cursor: "pointer",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                                onMouseDown={(e) => e.preventDefault()}
-                                            >
-                                                <div>{s.name || "(Uten navn)"}</div>
-                                                <div
-                                                    style={{
-                                                        fontSize: "0.75rem",
-                                                        color: "#6b7280",
-                                                    }}
-                                                >
-                                                    {s.email}
-                                                    {s.phone ? ` – ${s.phone}` : ""}
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                        </div>
-                    </div>
-
-                    {/* Nedtelling over knappen, begge sentrert */}
-                    <div
-                        style={{
-                            marginTop: "1.2rem",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "0.5rem",
-                        }}
-                    >
-                        <div style={{ fontWeight: 600, color: "#111827" }}>
-                            {formatSeconds(remainingSeconds)}
-                        </div>
-                        <button
-                            onClick={handleCloseSession}
-                            style={{
-                                padding: "0.5rem 1.2rem",
-                                borderRadius: "999px",
-                                border: "none",
-                                background: activeSession.isOpen === false ? "#6CE1AB" : "#6CE1AB",
-                                color: "black",
-                                fontWeight: 500,
-                                cursor: "pointer",
-                            }}
-                        >
-                            {activeSession.isOpen === false ? "Åpne økta" : "Lukk økt"}
-                        </button>
-                    </div>
-
-                    <hr style={{ margin: "1rem 0" }} />
-
-                    <h4>Registrerte studenter</h4>
-                    {attendees.length === 0 ? (
-                        <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
-                            Ingen har registrert seg ennå.
-                        </p>
-                    ) : (
-                        <table
-                            style={{ width: "100%", borderCollapse: "collapse" }}
-                        >
-                            <thead>
-                            <tr>
-                                <th
-                                    style={{
-                                        textAlign: "left",
-                                        borderBottom: "1px solid #e5e7eb",
-                                        padding: "0.3rem",
-                                    }}
-                                >
-                                    Navn
-                                </th>
-                                <th
-                                    style={{
-                                        textAlign: "left",
-                                        borderBottom: "1px solid #e5e7eb",
-                                        padding: "0.3rem",
-                                    }}
-                                >
-                                    E-post
-                                </th>
-                                <th
-                                    style={{
-                                        textAlign: "left",
-                                        borderBottom: "1px solid #e5e7eb",
-                                        padding: "0.3rem",
-                                    }}
-                                >
-                                    Tidspunkt
-                                </th>
-                                <th
-                                    style={{
-                                        textAlign: "right",
-                                        borderBottom: "1px solid #e5e7eb",
-                                        padding: "0.3rem",
-                                        width: 40,
-                                    }}
-                                >
-                                    
-                                </th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {attendees.map((a) => (
-                                <tr key={a.id}>
-                                    <td
-                                        style={{
-                                            padding: "0.3rem",
-                                            borderBottom: "1px solid #f3f4f6",
-                                        }}
-                                    >
-                                        {a.studentName || "-"}
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "0.3rem",
-                                            borderBottom: "1px solid #f3f4f6",
-                                        }}
-                                    >
-                                        {a.studentEmail || "-"}
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "0.3rem",
-                                            borderBottom: "1px solid #f3f4f6",
-                                            fontSize: "0.8rem",
-                                            color: "#6b7280",
-                                        }}
-                                    >
-                                        {a.createdAt
-                                            ? new Date(
-                                                a.createdAt.toMillis()
-                                            ).toLocaleTimeString("no-NO", {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                                second: "2-digit",
-                                            })
-                                            : "-"}
-                                    </td>
-                                    <td
-                                        style={{
-                                            padding: "0.3rem",
-                                            borderBottom: "1px solid #f3f4f6",
-                                            textAlign: "right",
-                                        }}
-                                    >
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveAttendee(a)}
-                                            aria-label="Fjern student fra økten"
-                                            title="Fjern student"
-                                            style={{
-                                                background: "transparent",
-                                                border: "none",
-                                                cursor: "pointer",
-                                                color: "#b91c1c",
-                                                padding: "0.15rem",
-                                            }}
-                                        >
-                                            {/* liten rødt kryss ikon */}
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                width="16"
-                                                height="16"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                aria-hidden
-                                            >
-                                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                                            </svg>
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
-                    )}
-                </section>
-            )}
         </div>
         {/* Modal: Bekreft fjerning av registrert student */}
         {deleteAttendeeModal.open && deleteAttendeeModal.attendee && (

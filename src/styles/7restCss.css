@@ -2,9 +2,6 @@
 #main {
     min-height: 100vh;
     text-align: center;
-    display: flex;
-    align-items: center;
-    flex-direction: column;
 }
 
 #main, header {
@@ -42,6 +39,10 @@ footer {
 
 .input-field {
     border: 2px solid var(--color-input-borderline);
+}
+
+.input-full {
+    width: 100%;
 }
 
 .button-primary {
@@ -94,7 +95,7 @@ footer {
     }
 }
 
-.login-card {
+.login-card, teacher-card {
     h1 {
        margin: 2rem 0 3rem;
     }
@@ -112,7 +113,7 @@ footer {
     margin-bottom: 4rem;
 }
 
-.student-card-top {
+.student-card-top, .teacher-card-top {
     border-bottom: 0;
     background-color: var(--color-black);
     border-radius: 30px 30px 0 0;
@@ -132,7 +133,7 @@ footer {
     }
 }
 
-.student-card-bottom {
+.student-card-bottom, .teacher-card-bottom {
     border-top: 0;
     border-radius: 0 0 30px 30px;
     min-height: 20rem;
@@ -217,7 +218,7 @@ footer {
     }
 }
 
-.student-overview-card, .approved-term-card {
+.student-overview-card, .approved-term-card, .teacher-card-bottom {
     h2 {
         padding-top: 2.5rem;
     }

@@ -356,136 +356,146 @@ function StudentPage({user}: StudentPageProps) {
 
     return (
         <>
-            <div className="card student-card student-card-top round-border-top">
-                <div className="studentInfo">
-                    <h2>{user.displayName || user.email}</h2>
-                    <p className="thinFont smallText opaqueFont">{labelFromTerm(termOptions, selectedTerm)}</p>
+                <div className="card student-card student-card-top round-border-top">
+                    <div className="studentInfo">
+                        <h2>{user.displayName || user.email}</h2>
+                        <p className="thinFont smallText opaqueFont">{labelFromTerm(termOptions, selectedTerm)}</p>
+                    </div>
+                    <img src="/card-man.svg" alt="Student-profile-placeholder"/>
                 </div>
-                <img src="/card-man.svg" alt="Student-profile-placeholder"/>
-            </div>
-            <div className="card student-card student-card-bottom round-border-bottom">
+                <div className="card student-card student-card-bottom round-border-bottom">
 
 
-                {status === "success" ? (
-                    <>
-                        <div className="registered-sucsess">
-                            {/* OPPMØTE REGISTERT */}
-                            <img src="/registered.svg" alt="Registered-icon"/>
+                    {status === "success" ? (
+                        <>
+                            <div className="registered-sucsess">
+                                {/* OPPMØTE REGISTERT */}
+                                <img src="/registered.svg" alt="Registered-icon"/>
+                                <h3 className="">
+                                    Oppmøte registrert
+                                </h3>
+                                {lastSessionName && (
+                                    <p className="">
+                                        {lastSessionName}
+                                    </p>
+                                )}
+                            </div>
+                        </>
+                    ) : status === "error" ? (
+                        <>
+                            {/* OPPMØTE IKKE REGISTERT */}
+                            <div className="">
+                                ❌
+                            </div>
                             <h3 className="">
-                                Oppmøte registrert
+                                Kunne ikke registrere oppmøte
                             </h3>
-                            {lastSessionName && (
-                                <p className="">
-                                    {lastSessionName}
+                            {statusMessage && (
+                                <p className="m-0 mb-1 fs-0_95 text-gray-700">
+                                    {statusMessage}
                                 </p>
                             )}
-                        </div>
-                    </>
-                ) : status === "error" ? (
-                    <>
-                        {/* OPPMØTE IKKE REGISTERT */}
-                        <div className="">
-                            ❌
-                        </div>
-                        <h3 className="">
-                            Kunne ikke registrere oppmøte
-                        </h3>
-                        {statusMessage && (
-                            <p className="m-0 mb-1 fs-0_95 text-gray-700">
-                                {statusMessage}
-                            </p>
-                        )}
-                    </>
-                ) : (
-                    <>
-                        {/* STANDARD TILSTAND */}
-                        <div className="code-input-container">
-                            <p className="spacedFont thinFont">
-                                Oppmøtekode fra lærer
-                            </p>
-                            <OtpInput
-                                value={code}
-                                onChange={handleCodeChange}
-                                disabled={loading}
-                            />
-                        </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* STANDARD TILSTAND */}
+                            <div className="code-input-container">
+                                <p className="spacedFont thinFont">
+                                    Oppmøtekode fra lærer
+                                </p>
+                                <OtpInput
+                                    value={code}
+                                    onChange={handleCodeChange}
+                                    disabled={loading}
+                                />
+                            </div>
 
-                        <img src="/qrscan.svg" alt="QR-code-icon" className="qr-code-icon"/>
+                            <img src="/qrscan.svg" alt="QR-code-icon" className="qr-code-icon"/>
 
-                        <br/>
+                            <br/>
 
-                        <button
-                            type="button"
-                            onClick={() => setScanning(true)}
-                            className="button-colorless fontUnderline boldFont QRbutton"
-                        >
-                            Skann QR-kode
-                        </button>
-
-                        {scanning && (
-                            <div
-                                style={{
-                                    position: "fixed",
-                                    inset: 0,
-                                    backgroundColor: "rgba(15,23,42,0.35)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    zIndex: 60,
-                                }}
-                                onClick={() => setScanning(false)}
-                                role="dialog"
-                                aria-modal="true"
-                                aria-label="Skann QR-kode"
+                            <button
+                                type="button"
+                                onClick={() => setScanning(true)}
+                                className="button-colorless fontUnderline boldFont QRbutton"
                             >
+                                Skann QR-kode
+                            </button>
+
+                            {scanning && (
                                 <div
-                                    onClick={(e) => e.stopPropagation()}
                                     style={{
-                                        width: "100%",
-                                        maxWidth: "480px",
-                                        backgroundColor: "#ffffff",
-                                        borderRadius: "1rem",
-                                        padding: "1rem 1.25rem",
-                                        boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                                        position: "fixed",
+                                        inset: 0,
+                                        backgroundColor: "rgba(15,23,42,0.35)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        zIndex: 60,
                                     }}
+                                    onClick={() => setScanning(false)}
+                                    role="dialog"
+                                    aria-modal="true"
+                                    aria-label="Skann QR-kode"
                                 >
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                                        <h3 style={{ margin: 0 }}>Skann QR-kode</h3>
-                                        <button
-                                            type="button"
-                                            onClick={() => setScanning(false)}
-                                            style={{
-                                                border: "none",
-                                                background: "transparent",
-                                                fontSize: "1.2rem",
-                                                cursor: "pointer",
-                                            }}
-                                            aria-label="Lukk"
-                                            title="Lukk"
-                                        >
-                                            ×
-                                        </button>
-                                    </div>
-                                    <div style={{ borderRadius: "0.75rem", overflow: "hidden", border: "1px solid #e5e7eb" }}>
-                                        <ErrorBoundary
-                                            onError={(error) => handleScannerError(error)}
-                                            resetKey={scanning}
-                                        >
-                                            <QrScanner onCode={handleQrResult} onError={handleScannerError} />
-                                        </ErrorBoundary>
+                                    <div
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{
+                                            width: "100%",
+                                            maxWidth: "480px",
+                                            backgroundColor: "#ffffff",
+                                            borderRadius: "1rem",
+                                            padding: "1rem 1.25rem",
+                                            boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                                        }}
+                                    >
+                                        <div style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            marginBottom: "0.5rem"
+                                        }}>
+                                            <h3 style={{margin: 0}}>Skann QR-kode</h3>
+                                            <button
+                                                type="button"
+                                                onClick={() => setScanning(false)}
+                                                style={{
+                                                    border: "none",
+                                                    background: "transparent",
+                                                    fontSize: "1.2rem",
+                                                    cursor: "pointer",
+                                                }}
+                                                aria-label="Lukk"
+                                                title="Lukk"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                        <div style={{
+                                            borderRadius: "0.75rem",
+                                            overflow: "hidden",
+                                            border: "1px solid #e5e7eb"
+                                        }}>
+                                            <ErrorBoundary
+                                                onError={(error) => handleScannerError(error)}
+                                                resetKey={scanning}
+                                            >
+                                                <QrScanner onCode={handleQrResult} onError={handleScannerError}/>
+                                            </ErrorBoundary>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-                    </>
-                )}
+                            )}
+                        </>
+                    )}
 
 
-            </div>
+                </div>
             <div className="card round-corners-full approved-term-card">
                 <h2>Godkjent</h2>
                 <p className="thinFont opaqueFont">
-                    Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd. Lykke til på eksamen!
+                    Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd. Lykke
+                    til på eksamen!
                 </p>
                 <button className="btn button-primary button-black button-next-semester">Start neste semester</button>
                 <button className="button-primary button-colorless fontUnderline">Innvilget permisjon</button>
@@ -550,7 +560,8 @@ function StudentPage({user}: StudentPageProps) {
                             </table>
                             <h2>Godkjent</h2>
                             <p className="thinFont opaqueFont">
-                                Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd. Lykke til på eksamen!
+                                Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er
+                                oppnådd. Lykke til på eksamen!
                             </p>
                         </>
                     )}
