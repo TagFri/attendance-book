@@ -1136,60 +1136,40 @@ const UsersAdmin: React.FC = () => {
     // ---------- RENDER ----------
 
     return (
-        <div style={{ marginBottom: "2rem" }}>
+        <div className="mb-2">
 
             {/* Faner */}
-            <div
-                style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    marginBottom: "0.75rem",
-                }}
-            >
+            <div className="flex gap-0_5 mb-0_75">
                 <button
                     type="button"
                     onClick={() => setActiveTab("students")}
-                    style={{
-                        flex: 1,
-                        padding: "0.35rem 0.5rem",
-                        borderRadius: "999px",
-                        border: activeTab === "students" ? "1px solid #6CE1AB" : "1px solid #d1d5db",
-                        background: activeTab === "students" ? "#6CE1AB" : "#ffffff",
-                        color: activeTab === "students" ? "black" : "#111827",
-                        fontSize: "0.85rem",
-                        cursor: "pointer",
-                    }}
+                    className={`flex-1 py-0_35 px-0_6 rounded-full fs-0_85 cursor-pointer ${
+                        activeTab === "students"
+                            ? "bg-green-light border-green-light text-black"
+                            : "bg-white border-gray text-gray-900"
+                    }`}
                 >
                     Studenter
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab("teachers")}
-                    style={{
-                        flex: 1,
-                        padding: "0.35rem 0.5rem",
-                        border: activeTab === "teachers" ? "1px solid #6CE1AB" : "1px solid #d1d5db",
-                        background: activeTab === "teachers" ? "#6CE1AB" : "#ffffff",
-                        color: activeTab === "teachers" ? "black" : "#111827",
-                        fontSize: "0.85rem",
-                        cursor: "pointer",
-                    }}
+                    className={`flex-1 py-0_35 px-0_6 fs-0_85 cursor-pointer ${
+                        activeTab === "teachers"
+                            ? "bg-green-light border-green-light text-black"
+                            : "bg-white border-gray text-gray-900"
+                    }`}
                 >
                     Lærere
                 </button>
                 <button
                     type="button"
                     onClick={() => setActiveTab("admins")}
-                    style={{
-                        flex: 1,
-                        padding: "0.35rem 0.5rem",
-                        borderRadius: "999px",
-                        border: activeTab === "admins" ? "1px solid #6CE1AB" : "1px solid #d1d5db",
-                        background: activeTab === "admins" ? "#6CE1AB" : "#ffffff",
-                        color: activeTab === "admins" ? "black" : "#111827",
-                        fontSize: "0.85rem",
-                        cursor: "pointer",
-                    }}
+                    className={`flex-1 py-0_35 px-0_6 rounded-full fs-0_85 cursor-pointer ${
+                        activeTab === "admins"
+                            ? "bg-green-light border-green-light text-black"
+                            : "bg-white border-gray text-gray-900"
+                    }`}
                 >
                     Admin
                 </button>
@@ -1200,14 +1180,7 @@ const UsersAdmin: React.FC = () => {
                 placeholder="Søk på navn, e-post eller mobil..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                style={{
-                    width: "100%",
-                    padding: "0.4rem 0.6rem",
-                    marginBottom: "0.75rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #d1d5db",
-                    fontSize: "0.9rem",
-                }}
+                className="w-full py-0_4 px-0_6 mb-0_75 rounded-md border-gray fs-0_9"
             />
 
             {loading ? (

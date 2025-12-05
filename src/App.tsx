@@ -1,33 +1,37 @@
 import LoadingSpinner from "./LoadingSpinner";
 import type React from "react";
-import { useState } from "react";
-import { useAuth } from "./hooks/useAuth";
-import { auth } from "./firebase";
-import { sendPasswordResetEmail } from "firebase/auth";
-import { toast } from "sonner";
+import {useState, useEffect} from "react";
+import {useAuth} from "./hooks/useAuth";
+import {auth} from "./firebase";
+import {sendPasswordResetEmail} from "firebase/auth";
+import {toast} from "sonner";
 import StudentPage from "./StudentPage";
 import TeacherPage from "./TeacherPage";
 import AdminPage from "./AdminPage";
 import Footer from "./Footer";
-
-const outerStyle: React.CSSProperties = {
-    minHeight: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    // UiO typografi – bruk Helvetica som basis (matches global CSS)
-    fontFamily: "Helvetica, Arial, sans-serif",
-};
+import Header from "./Header";
 
 function App() {
-    const { user, loading, login, logout } = useAuth();
-
+    const {user, login} = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    // Registrering er deaktivert – kun innlogging
     const [authError, setAuthError] = useState<string | null>(null);
+    const [authSuccess, setAuthSuccess] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [sendingReset, setSendingReset] = useState(false);
+    
+    // Auto-clear auth messages after 3 seconds
+    useEffect(() => {
+        if (!authError) return;
+        const t = setTimeout(() => setAuthError(null), 3000);
+        return () => clearTimeout(t);
+    }, [authError]);
+
+    useEffect(() => {
+        if (!authSuccess) return;
+        const t = setTimeout(() => setAuthSuccess(null), 3000);
+        return () => clearTimeout(t);
+    }, [authSuccess]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -64,13 +68,13 @@ function App() {
     const handleForgotPassword = async () => {
         const trimmed = email.trim();
         if (!trimmed) {
-            toast.error("Skriv inn e‑postadressen din først.");
+            setAuthError("Skriv inn e‑postadressen din først.");
             return;
         }
         setSendingReset(true);
         try {
             await sendPasswordResetEmail(auth, trimmed);
-            toast.success("Sendte e‑post for tilbakestilling av passord.");
+            setAuthSuccess("Sendte e‑post for tilbakestilling av passord.");
         } catch (err: any) {
             console.error(err);
             let msg = "Kunne ikke sende e‑post for tilbakestilling.";
@@ -80,104 +84,44 @@ function App() {
                 // For sikkerhet kan vi bruke en nøytral melding, men vi informerer brukeren om å sjekke adressen
                 msg = "Fant ingen bruker for denne e‑postadressen.";
             }
-            toast.error(msg);
+            setAuthError(msg);
         } finally {
             setSendingReset(false);
         }
     };
 
-    if (loading) {
-        return (
-            <>
-                {/* Main viewport-height wrapper to keep footer below the fold */}
-                <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", padding: "1rem 0.75rem 0", width: "100%" }}>
-                    <div className="page-card">
-                        <LoadingSpinner />
-                    </div>
-                </div>
-                {/* Footer rendered outside the 100vh wrapper so it starts out of sight */}
-                <Footer />
-            </>
-        );
-    }
-
+    // NO USER -> SHOW LANDING LOGIN PAGE
     if (!user) {
         return (
             <>
-                <div className="front-page" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", background: "#CEFFDF", width: "100%", padding: "1rem 0.75rem 0" }}>
-                    <div className="page-card">
-                        <h1 style={{ marginBottom: "2rem", textAlign: "center"}}>Oppmøteregistrering</h1>
-
+                <div id="main">
+                    <div id="loginMan">
+                        <img src="/logo.svg" alt="Logo" className=""/>
+                    </div>
+                    <div className="card round-corners-full login-card">
+                        <h1>Velkommen tilbake</h1>
                         <form onSubmit={handleSubmit}>
-                            <div style={{ marginBottom: "0.75rem" }}>
-                                <label
-                                    style={{
-                                        display: "block",
-                                        fontSize: "0.85rem",
-                                        marginBottom: "0.2rem",
-                                    }}
-                                >
-                                    Mobil / Epost
-                                </label>
-                                <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="uiobrukernavn@uio.no"
-                                    style={{
-                                        width: "100%",
-                                        padding: "0.5rem",
-                                        borderRadius: "0.5rem",
-                                        border: "1px solid #d1d5db",
-                                    }}
+                            <div className="input-group">
+                                <label className="input-label">Mobil / epost</label>
+                                <input className="input-field round-corners-half"
+                                       type="email"
+                                       value={email}
+                                       onChange={(e) => setEmail(e.target.value)}
                                 />
                             </div>
-
-                            <div style={{ marginBottom: "0.75rem" }}>
-                                <label
-                                    style={{
-                                        display: "block",
-                                        fontSize: "0.85rem",
-                                        marginBottom: "0.2rem",
-                                    }}
-                                >
-                                    Passord
-                                </label>
-                                <input
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Minst 6 tegn"
-                                    style={{
-                                        width: "100%",
-                                        padding: "0.5rem",
-                                        borderRadius: "0.5rem",
-                                        border: "1px solid #d1d5db",
-                                    }}
+                            <div className="input-group">
+                                <label className="input-label">Passord</label>
+                                <input className="input-field round-corners-half"
+                                       type="password"
+                                       value={password}
+                                       onChange={(e) => setPassword(e.target.value)}
                                 />
                             </div>
-
-                            {authError && (
-                                <p style={{ color: "red", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-                                    {authError}
-                                </p>
-                            )}
 
                             <button
                                 type="submit"
                                 disabled={submitting}
-                                style={{
-                                    width: "100%",
-                                    padding: "0.6rem 1rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    background: "#6CE1AB",
-                                    color: "black",
-                                    fontWeight: 500,
-                                    cursor: "pointer",
-                                    marginTop: "1.5rem",
-                                    marginBottom: "1rem",
-                                }}
+                                className="button-primary button-black round-corners-half"
                             >
                                 {submitting ? "Logger inn..." : "Logg inn"}
                             </button>
@@ -185,25 +129,20 @@ function App() {
                                 type="button"
                                 onClick={handleForgotPassword}
                                 disabled={sendingReset}
-                                style={{
-                                    width: "100%",
-                                    padding: "0.6rem 1rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    background: "#6CE1AB",
-                                    color: "black",
-                                    fontWeight: 500,
-                                    cursor: "pointer",
-                                    marginTop: 0,
-                                    marginBottom: "0.25rem",
-                                }}
+                                className="button-colorless boldFont"
                             >
                                 {sendingReset ? "Sender e‑post..." : "Glemt passord"}
                             </button>
+                            <p className="errorTxt"><br/>
+                                {authError}
+                            </p>
+                            <p className="successTxt"><br/>
+                                {authSuccess}
+                            </p>
                         </form>
                     </div>
                 </div>
-                <Footer />
+                <Footer/>
             </>
         );
     }
@@ -212,19 +151,22 @@ function App() {
     return (
         <>
             {/* Center page content until it grows tall; leave slim top/side background */}
-            <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", padding: "1rem 0.75rem 0" }}>
+            <Header user={user}></Header>
+            <div id="main">
                 {user.role === "admin" ? (
-                    <AdminPage user={user} />
+                    <AdminPage user={user}/>
                 ) : user.role === "teacher" ? (
-                    <TeacherPage user={user} />
+                    <TeacherPage user={user}/>
                 ) : (
-                    <StudentPage user={user} />
+                    <StudentPage user={user}/>
                 )}
             </div>
             {/* Footer sits after the viewport-height content, so it starts out of sight */}
-            <Footer />
+            <Footer/>
         </>
-        );
+    );
+
+
 }
 
 export default App;

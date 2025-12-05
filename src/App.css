@@ -1,11 +1,3 @@
-#root {
-  /* Make the app span full viewport width without implicit centering/padding */
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 0;
-  text-align: initial;
-}
 
 .logo {
   height: 6em;

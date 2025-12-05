@@ -1,0 +1,107 @@
+/* MAIN BACKGROUND COLOUR */
+body {background-color: var(--color-background);}
+
+/* DARK MODE */
+body {transition: background-color 0.3s, color 0.3s;}
+
+/*------BUTTONS------- */
+/*-------------------- */
+.btn {
+    /* Style */
+    border-radius: 1rem;
+    border: none;
+    text-decoration: none;
+    text-align: center;
+    padding: 0 5%;
+
+    /* Interactivity */
+    cursor: pointer;
+    transition: background 100ms ease-in-out,
+    transform 100ms ease;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+/*----- LINKS -------- */
+/*-------------------- */
+.link, .link:hover, .link:visited,
+a, a:hover, a:visited {     color: var(--color-link);}
+a, .link:hover, a:hover {   text-decoration: none;}
+.link {
+    font-weight: bold;
+    text-decoration: underline;
+    padding-left: 0;
+}
+
+/*
+- INPUT + SELECT
+*/
+input, select {
+    padding: 0.5rem 0.75rem;
+    border-radius: 1rem;
+    border: 0.07rem solid var(--color-input-borderline);
+    cursor: pointer;
+}
+
+/*
+- INPUT
+*/
+/*-> FOCUS */
+input:focus, select:focus {
+    outline: 0.1rem solid var(--color-primary-medium);
+    outline-offset: -0.075rem;
+}
+/*-> INVALID */
+.invalid-input {
+    outline: 0.1rem solid var(--color-red);
+    outline-offset: -0.075rem;
+}
+
+/*
+- SELECT
+/* Removes standard arrow and colours*/
+.custom-select select {
+    appearance: none;
+    background-color: var(--color-input-field);
+    color: var(--color-font);
+}
+/* Hover colours */
+.custom-select select:hover {
+}
+
+/* Add arrow */
+.custom-select {
+    position: relative;
+}
+.custom-select::before,
+.custom-select::after {
+    --size: 0.3rem;
+    position: absolute;
+    content: "";
+    right: 1rem;
+    pointer-events: none; /* Avoid event on pointer */
+}
+
+/* ADD COURSER DOWN */
+.custom-select::after {
+    /* Arrow created with borders*/
+    border-left: var(--size) solid transparent;
+    border-right: var(--size) solid transparent;
+    border-top: var(--size) solid var(--color-font);
+    top: 45%; /* 55% if both are in use*/
+}
+
+/* DATEPICKER */
+input[type="date"]{
+    background-color: var(--color-input-background);
+    color: var(--color-font);
+}
+::-webkit-calendar-picker-indicator{
+    background-color: var(--color-input-background);
+    color: var(--color-font);
+    cursor: pointer;
+}
+
+.hidden {
+    display: none;
+}

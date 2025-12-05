@@ -1,0 +1,219 @@
+/* GENERAL */
+#main {
+    min-height: 100vh;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+}
+
+#main, header {
+    margin: 2rem 1.5rem 0 1.5rem;
+}
+
+.card {
+    background: var(--color-card-background);
+    border: 3px solid var(--color-black);
+    width: 100%;
+    max-width: 400px;
+    h1 {
+        font-size: 1.8rem;
+    }
+}
+
+footer {
+    width: 100%;
+}
+
+.round-corners-full {border-radius: 30px;}
+.round-corners-half {border-radius: 15px;}
+
+.input-group, .authError{
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    margin-bottom: 35px;
+}
+
+.input-label {
+    margin-left: 15px;
+    margin-bottom: 7px;
+}
+
+.input-field {
+    border: 2px solid var(--color-input-borderline);
+}
+
+.button-primary {
+    width: 100%;
+    font-size: 18px;
+    font-style: normal;
+    font-weight: 700;
+}
+
+.button-colorless {
+    background-color: transparent;
+    color: var(--color-black);
+}
+
+.button-border {
+    border: 2px solid var(--color-black);
+}
+
+.button-black {
+    background-color: var(--color-black);
+    color: white;
+}
+
+.button-small {
+    text-align: center;
+    padding: 8px 15px;
+    height: min-content;
+    border-radius: 10px;
+    border-width: 3px;
+
+}
+.login-card button {
+    margin-top: 1.1rem;
+}
+
+.input-field, .button-primary {
+    height: 60px;
+}
+
+/* LOGIN PAGE */
+
+#loginMan {
+    margin: 0 auto;
+    width: 20rem;
+}
+
+.login-card {
+    h1 {
+       margin: 2rem 0 3rem;
+    }
+}
+
+.card {
+    padding: 0 1.8rem;
+}
+
+.student-card-top, .student-overview-card {
+    margin-top: 4rem;
+}
+.student-card-bottom, .student-overview-card {
+    margin-bottom: 4rem;
+}
+
+.student-card-top {
+    border-bottom: 0;
+    background-color: var(--color-black);
+    border-radius: 30px 30px 0 0;
+    display: flex;
+    justify-content: space-between;
+    .studentInfo {
+        padding: 1.5rem 0 1.5rem;
+        text-align: left;
+        h2, p {
+            color: var(--color-white);
+        }
+    }
+        img {
+            height: 5rem;
+            align-self: end;
+    }
+}
+
+.student-card-bottom {
+    border-top: 0;
+    border-radius: 0 0 30px 30px;
+    min-height: 20rem;
+    align-content: center;
+    .code-input-container {
+        p {
+            padding-top: 2.5rem;
+            margin-bottom: 1rem;
+        }
+    }
+
+    .qr-code-icon {
+        margin-top: 2rem;
+        height: 2rem;
+    }
+
+    .QRbutton {
+        padding-bottom: 2.5rem;
+    }
+
+    .registered-sucsess {
+        img {
+            height: 7rem;
+        }
+        h3 {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+    }
+}
+
+.student-overview-card {
+    background-color: var(--color-black);
+    padding-bottom: 2.5rem;
+
+    h2, p, tr, td, th {
+        color: var(--color-white);
+    }
+
+    .table-container {
+        margin-top: 3rem;
+        width: 100%;
+        text-align: left;
+
+        tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            height: 2rem;
+            justify-self: center;
+        }
+
+        td {
+            vertical-align: middle;
+            img {
+                height: 1rem;
+            }
+        }
+
+        .class-overview {
+            padding-left: 0.5rem;
+        }
+
+        .required-classes {
+            text-align: center;
+            padding-right: 1rem;
+        }
+    }
+}
+
+.approved-term-card {
+    background-color: var(--color-yellow-l);
+    border-color: var(--color-yellow-l);
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 2rem;
+
+    .button-black {
+        color: var(--color-yellow-l);
+    }
+
+    .button-next-semester {
+        margin-top: 2rem;
+    }
+}
+
+.student-overview-card, .approved-term-card {
+    h2 {
+        padding-top: 2.5rem;
+    }
+    p {
+        margin-top: 0.5rem;
+    }
+}

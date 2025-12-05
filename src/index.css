@@ -1,275 +1,7 @@
-/* Reset from Vite template replaced with UiO typography rules */
-
-/* Base document */
-html, body {
-  margin: 0;
-  padding: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  max-width: 100%;
-  overflow-x: hidden; /* Prevent horizontal scroll on mobile */
-}
-
-body {
-  /*  Font attributes */
-  color: black;
-
-  h1 {
-    line-height: 1;
-    letter-spacing: -0.01rem;
-  }
-
-  h2 {
-    line-height: 1.067;
-    letter-spacing: 0.03rem;
-  }
-
-  h3 {
-    line-height: 1.083;
-    letter-spacing: 0.02rem;
-  }
-
-  h4 {
-    line-height: 1.1;
-    letter-spacing: 0.01rem;
-  }
-
-  h5 {
-    line-height: 1.111;
-    letter-spacing: 0.01rem;
-  }
-
-  h6 {
-    line-height: 1.125;
-    letter-spacing: 0.01rem;
-  }
-
-  p {
-    line-height: 1.3;
-    letter-spacing: 0.01rem;
-    color: black;
-  }
-}
-*, h1, h2, h3, h4, h5, h6, p, input, a, li {
-  font-family: "Helvetica", "Arial", sans-serif;;
-  color: black
-}
-
-/* MOBILE FONTS SIZE AND TYPES */
-@media (max-width: 576px) {
-  /* Root font-size*/
-  * {font-size: 14px;}
-  /* Relative font-sizes*/
-  body {
-    /* Heading font sizes*/
-    h1 {font-size: 1.5rem}
-    h2 {font-size: 1.4rem}
-    h3 {font-size: 1.25rem}
-    h4 {font-size: 1.15rem}
-    input, select {font-size: 1.1rem}
-    button {font-size: 1rem}
-    /* Bold text*/
-    h1, h2, h3, h4 {font-weight: 600}
-  }
-}
-
-/* TABLET FONTS FONTS SIZE AND TYPES **/
-@media (min-width: 576px) {
-  /* Root font-size*/
-  * {font-size: 16px;}
-  /* Relative font-sizes */
-  body {
-    /* Heading font sizes*/
-    h1 {font-size: 2.125rem}
-    h2 {font-size: 1.35rem}
-    h3 {font-size: 1.25rem}
-    h4 {font-size: 1.125rem}
-    input, select {font-size: 1.1rem}
-    button {font-size: 1rem}
-    /* Bold text*/
-    h1, h2, h3, h4 {font-weight: 600}
-  }
-}
-/* DESKTOP FONTS FONTS SIZE AND TYPES **/
-@media (min-width: 992px) {
-  /* Root font-size*/
-  * {font-size: 18px;}
-  /* Heading font sizes*/
-  body {
-    h1 {font-size: 1.6rem}
-    h2 {font-size: 1.3rem}
-    h3 {font-size: 1.2rem}
-    h4 {font-size: 1.1rem}
-    h5 {font-size: 1.1rem}
-    input, select {font-size: 1.1rem}
-    button {font-size: 1rem}
-    /* Bold text */
-    h1, h2, h3, h4, h5 {font-weight: 600}
-  }
-}
-
-/* Ensure predictable sizing and avoid overflow due to padding/borders */
-*, *::before, *::after { box-sizing: border-box; }
-
-/* Media/content elements should never overflow the viewport */
-img, svg, canvas, video { max-width: 100%; height: auto; }
-
-/* UiO font plan: Helvetica for body text; Times New Roman for ingress/sitat */
-body, input, textarea, select, button {
-  font-family: Helvetica, Arial, sans-serif;
-  color: #000000;
-}
-
-/* Paragraphs and links */
-p, a {
-  font-size: 18px;
-  font-weight: 400;
-  color: #000000;
-}
-
-a {
-  text-decoration: none;
-}
-a:hover {
-  text-decoration: underline;
-  color: #000000;
-}
-
-.thinFont {
-  font-weight: 100;
-}
-
-.boldFont {
-  font-weight: 700;
-}
-
-.opaqeFont {
-  opacity: 0.8;
-}
-
-.smallFont {
-  font-size: 1rem;
-}
-
-/* Footer (harmonized from legacy helper file) */
-:root {
-  --color-footer-background: #2EC483; /* Footer BG per spec */
-  --color-font: #000000; /* Keep black text for good contrast on light green */
-}
-
-footer {
-  max-width: 100%;
-  color: var(--color-font);
-  font-size: 0.9rem;
-  margin-top: 2.5rem;
-  padding: 0.5rem 2rem 0.5rem;
-  background-color: var(--color-footer-background);
-  border-radius: 75px 75px 0 0;
-}
-
-.footer-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 2rem;
-  padding: 2rem 1.25rem;
-  max-width: 1200px;
-  margin: 0 auto;
-  column-gap: 5rem;
-}
-
-@media (max-width: 600px) {
-  footer { margin-top: 3rem; }
-  footer .footer-row { flex-direction: column; align-items: center; text-align: center; }
-  .footer-row  { gap: 1rem }
-}
-
-footer h2, footer p { margin-bottom: 1.25rem; }
-
-footer .footer-left { flex: 1 1 70%; }
-footer .footer-right { flex: 1 1 30%; display: flex; flex-direction: column; align-items: flex-end; }
-
-@media (max-width: 600px) {
-  footer .footer-left, footer .footer-right { width: 100%; align-items: center; }
-  footer .footer-right { align-items: center; }
-}
-
-footer .footer-logo {
-  width: 176px;
-  height: 64px;
-  max-width: 100%;
-  height: auto;
-  border-radius: 8px;
-  margin: 1rem 0 0.5rem;
-}
-
-footer .footer-link { font-size: 1.04rem; }
-footer .footer-link { text-decoration: underline; }
-footer .footer-mail { font-size: 0.9rem; opacity: 0.7; margin-top: 0.25rem; }
-footer .footer-credits { margin-top: 0.75rem; text-align: right; }
-
-@media (max-width: 600px) {
-  footer .footer-credits { text-align: center; }
-}
 
 
-/* Ingress and quotes use Times New Roman */
-.ingress,
-blockquote {
-  font-family: "Helvetica", "Arial", sans-serif;
-}
-
-/* Utility: responsive table wrapper (used on teacher/admin pages) */
-.table-responsive {
-  width: 100%;
-  overflow-x: auto;
-}
-
-/* Teacher page input/select look & feel (existing styles may reference these) */
-.teacher-field {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  background: #ffffff;
-  text-align: center;
-}
-.teacher-field:focus {
-  outline: none;
-  border-color: #2EC483;
-  box-shadow: 0 0 0 3px rgba(46, 196, 131, 0.15);
-}
-.teacher-static {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  background: #f9fafb;
-  text-align: center;
-}
-.teacher-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0; right: 0;
-  z-index: 10;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  margin-top: 0.2rem;
-  list-style: none;
-  padding: 0;
-  max-height: 220px;
-  overflow-y: auto;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.08);
-}
-
-input:focus, select:focus {
-  outline: 0.1rem solid #2EC483;
-  outline-offset: -0.075rem;
-}
-
-/* Prevent iOS Safari from zooming inputs on focus by enforcing 16px font-size on small screens */
 @media (max-width: 640px) {
-  input, select, textarea, button { font-size: 16px !important; }
+
   /* Cards should never exceed viewport width on small screens */
   .page-card { max-width: 100vw !important; }
 }
@@ -309,6 +41,29 @@ button {
 }
 
 .button-green {
-  background-color: #6CE1AB;
+  background-color: #blue;
   color: black;
+}
+
+
+/* CARDS */
+.page-card {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  background: #f9fafb;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 640px) {
+  /* Behold kortfølelsen også på mobil, men la sidekantene vise bakgrunnsfargen */
+  .page-card {
+    width: 100%;
+    max-width: 550px;
+    padding: 0.9rem 1rem;
+    background: #f9fafb;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  }
 }

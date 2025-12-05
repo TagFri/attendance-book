@@ -1,0 +1,53 @@
+/* ------MOBILE------*/
+@media (max-width: 576px) {
+    main {
+        display: flex;
+        flex-direction: column;
+    }}
+
+/* ------TABLET------*/
+@media (min-width: 577px) {
+    /* LAYOUT */
+    main {
+        display: grid;
+        grid-template-columns: 50% 50%;
+        /* First two boxes shares horizontal space */
+        #user-container1 {      grid-column: 1; }
+        #user-container2 {      grid-column: 1; }
+        /* Last box spreads out in two horizontal spaces */
+        #approval-container {   grid-column: 1 / span 2;}
+    }
+}
+
+/* ------DESKTOP-----*/
+/* ----------------- */
+@media (min-width: 992px) {
+    /* LAYOUT */
+    main {
+        /* Limit width of content*/
+        max-width: 980px;
+
+        /* Center content horizontally */
+        margin: 0 auto;
+
+        /* Grid layout */
+        /* not specified, takes from tablet layout */
+    }
+}
+
+/* ------DESKTOP-----*/
+/* ----------------- */
+
+
+/* HIDE ELEMENTS FROM SCREEN, BUT NOT SCREE-READERS*/
+.visually-hidden {
+    border-width: 0 !important;
+    clip: rect(1px, 1px, 1px, 1px) !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    position: absolute !important;
+    white-space: nowrap !important;
+    width: 1px !important;
+}
+

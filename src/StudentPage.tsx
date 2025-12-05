@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import {useEffect, useMemo, useState} from "react";
 import type React from "react";
-import type { AppUser } from "./hooks/useAuth";
-import { useAuth } from "./hooks/useAuth";
-import { db } from "./firebase";
+import type {AppUser} from "./hooks/useAuth";
+import {db} from "./firebase";
 import {
     collection,
     query,
@@ -14,10 +13,9 @@ import {
     Timestamp,
 } from "firebase/firestore";
 import QrScanner from "./QrScanner";
-import { useTermOptions, labelFromTerm } from "./terms";
-import ProfileModal from "./ProfileModal";
+import {useTermOptions, labelFromTerm} from "./terms";
 import LoadingSpinner from "./LoadingSpinner";
-
+import OtpInput from "./OtpInput";
 
 type StudentPageProps = {
     user: AppUser;
@@ -48,11 +46,11 @@ type SessionRow = {
 
 type StatusState = "idle" | "success" | "error";
 
-function StudentPage({ user }: StudentPageProps) {
-    const { logout } = useAuth();
+function StudentPage({user}: StudentPageProps) {
+
     const [code, setCode] = useState("");
     const [loading, setLoading] = useState(false);
-    const [showProfile, setShowProfile] = useState(false);
+
 
     const selectedTerm = user.term ?? 11;
 
@@ -61,7 +59,7 @@ function StudentPage({ user }: StudentPageProps) {
     const [statsVersion, setStatsVersion] = useState(0);
     const [scanning, setScanning] = useState(false);
 
-    const { options: termOptions } = useTermOptions();
+    const {options: termOptions} = useTermOptions();
 
     // Detaljmodal for gruppe → viser hver time og status (registrert/mangler)
     const [groupModalOpen, setGroupModalOpen] = useState(false);
@@ -300,14 +298,14 @@ function StudentPage({ user }: StudentPageProps) {
         if (!groupModalOpen || !groupModalCategory) return [] as (TimeRow & { attended: boolean })[];
         const list = allTimes
             .filter((t) => t.category === groupModalCategory)
-            .map((t) => ({ ...t, attended: !!attendedByTimeId[t.id] }));
+            .map((t) => ({...t, attended: !!attendedByTimeId[t.id]}));
         list.sort((a, b) => {
             const ao = (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER);
             if (ao !== 0) return ao;
             const na = leadingNumber(a.name);
             const nb = leadingNumber(b.name);
             if (na !== nb) return na - nb;
-            return a.name.localeCompare(b.name, "nb-NO", { sensitivity: "base" });
+            return a.name.localeCompare(b.name, "nb-NO", {sensitivity: "base"});
         });
         return list;
     }, [groupModalOpen, groupModalCategory, allTimes, attendedByTimeId]);
@@ -321,12 +319,11 @@ function StudentPage({ user }: StudentPageProps) {
         setGroupModalCategory(null);
     };
 
-    // Manuell kodeinput → auto når 6 siffer
-    const handleCodeChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-        const raw = e.target.value.replace(/\D/g, "");
+    // Manuell kodeinput (fra OTP-komponenten) → auto når 6 siffer
+    const handleCodeChange = (nextValue: string) => {
+        const raw = (nextValue || "").replace(/\D/g, "");
         const trimmed = raw.slice(0, 6);
         setCode(trimmed);
-
         if (trimmed.length === 6 && !loading) {
             void registerAttendance(trimmed);
         }
@@ -336,7 +333,7 @@ function StudentPage({ user }: StudentPageProps) {
     useEffect(() => {
         if (status === "idle") return;
 
-        const timeoutMs = status === "success" ? 5000 : 5000;
+        const timeoutMs = status === "success" ? 10000 : 10000;
         const t = setTimeout(() => {
             resetToIdle();
         }, timeoutMs);
@@ -346,436 +343,257 @@ function StudentPage({ user }: StudentPageProps) {
 
     return (
         <>
-        <div className="page-card page-card--student">
-            {/* Topp: navn + min profil + logg ut */}
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "0.75rem",
-                }}
-            >
-                <div style={{ fontWeight: 600 }}>
-                    {user.displayName || user.email}
+            <div className="card student-card student-card-top round-border-top">
+                <div className="studentInfo">
+                    <h2>{user.displayName || user.email}</h2>
+                    <p className="thinFont smallText opaqueFont">{labelFromTerm(termOptions, selectedTerm)}</p>
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <button
-                        type="button"
-                        onClick={() => setShowProfile(true)}
-                        style={{
-                            padding: "0.35rem 0.9rem",
-                            borderRadius: "999px",
-                            border: "1px solid #d1d5db",
-                            background: "#ffffff",
-                            cursor: "pointer",
-                            fontSize: "0.85rem",
-                        }}
-                    >
-                        Min profil
-                    </button>
-                    <button
-                        onClick={logout}
-                        type="button"
-                        style={{
-                            padding: "0.35rem 0.9rem",
-                            borderRadius: "999px",
-                            border: "1px solid #d1d5db",
-                            background: "#ffffff",
-                            cursor: "pointer",
-                            fontSize: "0.85rem",
-                        }}
-                    >
-                        Logg ut
-                    </button>
-                </div>
+                <img src="/card-man.svg" alt="Student-profile-placeholder"/>
             </div>
-            <h2 style={{
-                textAlign: "center",
-                margin: "4rem 0 1.5rem",
-            }}>
-                Registrer oppmøte
-            </h2>
+            <div className="card student-card student-card-bottom round-border-bottom">
 
-            {inactive && (
-                <p style={{ color: "red", textAlign: "center" }}>
-                    Du er markert som "{user.semesterStatus}" dette semesteret. Ingen
-                    oppmøtekrav, men du kan fortsatt registrere oppmøte.
-                </p>
-            )}
 
-            {/* Øvre del: statuskort eller kode/QR */}
-            <div
-                style={{
-                    marginTop: "1rem",
-                    textAlign: "center",
-                }}
-            >
                 {status === "success" ? (
                     <>
-                        <div
-                            style={{
-                                fontSize: "4rem",
-                                color: "#16a34a",
-                                marginBottom: "0.5rem",
-                            }}
-                        >
-                            ✅
+                        <div className="registered-sucsess">
+                            {/* OPPMØTE REGISTERT */}
+                            <img src="/registered.svg" alt="Registered-icon"/>
+                            <h3 className="">
+                                Oppmøte registrert
+                            </h3>
+                            {lastSessionName && (
+                                <p className="">
+                                    {lastSessionName}
+                                </p>
+                            )}
                         </div>
-                        <h3
-                            style={{
-                                margin: 0,
-                                marginBottom: "0.3rem",
-                            }}
-                        >
-                            Oppmøte registrert
-                        </h3>
-                        {lastSessionName && (
-                            <p
-                                style={{
-                                    margin: 0,
-                                    marginBottom: "1rem",
-                                    fontSize: "1rem",
-                                    color: "#374151",
-                                }}
-                            >
-                                {lastSessionName}
-                            </p>
-                        )}
-
-                        <button
-                            type="button"
-                            onClick={resetToIdle}
-                            style={{
-                                marginTop: "0.5rem",
-                                padding: "0.5rem 1.2rem",
-                                borderRadius: "999px",
-                                border: "none",
-                                background: "#2563eb",
-                                color: "white",
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                fontSize: "0.95rem",
-                            }}
-                        >
-                            Registrer en kode til
-                        </button>
                     </>
                 ) : status === "error" ? (
                     <>
-                        <div
-                            style={{
-                                fontSize: "4rem",
-                                color: "#dc2626",
-                                marginBottom: "0.5rem",
-                            }}
-                        >
+                        {/* OPPMØTE IKKE REGISTERT */}
+                        <div className="">
                             ❌
                         </div>
-                        <h3
-                            style={{
-                                margin: 0,
-                                marginBottom: "0.3rem",
-                            }}
-                        >
+                        <h3 className="">
                             Kunne ikke registrere oppmøte
                         </h3>
                         {statusMessage && (
-                            <p
-                                style={{
-                                    margin: 0,
-                                    marginBottom: "1rem",
-                                    fontSize: "0.95rem",
-                                    color: "#374151",
-                                }}
-                            >
+                            <p className="m-0 mb-1 fs-0_95 text-gray-700">
                                 {statusMessage}
                             </p>
                         )}
-
-                        <button
-                            type="button"
-                            onClick={resetToIdle}
-                            style={{
-                                marginTop: "0.5rem",
-                                padding: "0.5rem 1.2rem",
-                                borderRadius: "999px",
-                                border: "none",
-                                background: "#6b7280",
-                                color: "white",
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                fontSize: "0.95rem",
-                            }}
-                        >
-                            Prøv en kode til
-                        </button>
                     </>
                 ) : (
                     <>
-                        <label
-                            style={{
-                                display: "block",
-                                marginBottom: "0.3rem",
-                            }}
-                        >
-                            6-sifret kode fra lærer
-                        </label>
-                        <input
-                            value={code}
-                            onChange={handleCodeChange}
-                            maxLength={6}
-                            placeholder="482931"
-                            style={{
-                                padding: "0.5rem 0.8rem",
-                                fontSize: "1.2rem",
-                                letterSpacing: "0.3em",
-                                textAlign: "center",
-                                borderRadius: "0.5rem",
-                                border: "1px solid #d1d5db",
-                                minWidth: "10rem",
-                                maxWidth: "12rem",
-                                marginTop: "0.5rem",
-                            }}
-                        />
+                        {/* STANDARD TILSTAND */}
+                        <div className="code-input-container">
+                            <p className="spacedFont thinFont">
+                                Oppmøtekode fra lærer
+                            </p>
+                            <OtpInput
+                                value={code}
+                                onChange={handleCodeChange}
+                                disabled={loading}
+                            />
+                        </div>
 
-                        {loading && <LoadingSpinner />}
+                        <img src="/qrscan.svg" alt="QR-code-icon" className="qr-code-icon"/>
+
                         <br/>
 
                         <button
                             type="button"
                             onClick={() => setScanning((s) => !s)}
-                            style={{
-                                margin: "2rem 0",
-                                padding: "0.4rem 0.9rem",
-                                borderRadius: "999px",
-                                border: "1px solid #d1d5db",
-                                background: scanning ? "#e5e7eb" : "#f9fafb",
-                                cursor: "pointer",
-                                fontSize: "0.9rem",
-                            }}
+                            className="button-colorless fontUnderline boldFont QRbutton"
                         >
                             {scanning ? "Stopp skanning" : "Skann QR-kode"}
                         </button>
 
                         {scanning && (
-                            <div
-                                style={{
-                                    marginTop: "0.8rem",
-                                    display: "flex",
-                                    justifyContent: "center",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        width: "260px",
-                                        maxWidth: "100%",
-                                        borderRadius: "0.75rem",
-                                        overflow: "hidden",
-                                        border: "1px solid #d1d5db",
-                                    }}
-                                >
-                                    <QrScanner onCode={handleQrResult} />
+                            <div className="mt-0_8 flex justify-center">
+                                <div className="w-260px maxw-full rounded-lg overflow-hidden border-gray">
+                                    <QrScanner onCode={handleQrResult}/>
                                 </div>
                             </div>
                         )}
                     </>
                 )}
+
+
             </div>
+            <div className="card round-corners-full approved-term-card">
+                <h2>Godkjent</h2>
+                <p className="thinFont opaqueFont">
+                    Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd.Lykke til på eksamen!
+                </p>
+                <button className="btn button-primary button-black button-next-semester">Start neste semester</button>
+                <button className="button-primary button-colorless fontUnderline">Innvilget permisjon</button>
+            </div>
+            <div className="card round-corners-full student-overview-card">
 
-            <hr style={{ marginTop: "2rem", marginBottom: "2rem" }} />
-
-            <section>
-                <h3 style={{
-                    textAlign: "center",
-                    margin: "0 0 1.5rem",
-                }}>{labelFromTerm(termOptions, selectedTerm)}</h3>
-
-                {statsLoading ? (
-                    <LoadingSpinner />
-                ) : stats.length === 0 ? (
-                    <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
-                        Ingen registrerte timer for denne terminen ennå.
+                {inactive && (
+                    <p className="text-red text-center">
+                        Du er markert som "{user.semesterStatus}" dette semesteret. Ingen
+                        oppmøtekrav, men du kan fortsatt registrere oppmøte.
                     </p>
-                ) : (
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead>
-                        <tr>
-                            <th
-                                style={{
-                                    textAlign: "left",
-                                    borderBottom: "1px solid #e5e7eb",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Gruppe
-                            </th>
-                            <th
-                                style={{
-                                    textAlign: "left",
-                                    borderBottom: "1px solid #e5e7eb",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Registrerte oppmøter
-                            </th>
-                            <th
-                                style={{
-                                    textAlign: "left",
-                                    borderBottom: "1px solid #e5e7eb",
-                                    padding: "0.3rem",
-                                }}
-                            >
-                                Krav
-                            </th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {stats.map((s) => {
-                            const metRequirement =
-                                s.requiredCount != null &&
-                                s.attendedCount >= s.requiredCount;
-
-                            const baseCellStyle: React.CSSProperties = {
-                                padding: "0.5rem",
-                                borderBottom: "1px solid #f3f4f6",
-                                background: metRequirement ? "#dcfce7" : "transparent",
-                            };
-
-                            return (
-                                <tr
-                                    key={s.category}
-                                    onClick={() => openGroupModal(s.category)}
-                                    title="Klikk for å se detaljer"
-                                    style={{ cursor: "pointer" }}
-                                >
-                                    <td style={baseCellStyle}>
-                                        {s.category}
-                                    </td>
-                                    <td style={baseCellStyle}>
-                                        {s.totalSessions > 0
-                                            ? `${s.attendedCount}/${s.totalSessions}`
-                                            : s.attendedCount}
-                                    </td>
-                                    <td style={baseCellStyle}>
-                                        {s.requiredCount ?? "-"}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        </tbody>
-                    </table>
                 )}
-            </section>
 
-            {/* Modal: detaljer for valgt gruppe */}
-            {groupModalOpen && (
-                <div
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        backgroundColor: "rgba(15,23,42,0.35)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 50,
-                    }}
-                    onClick={closeGroupModal}
-                >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            width: "100%",
-                            maxWidth: "420px",
-                            backgroundColor: "#ffffff",
-                            borderRadius: "1rem",
-                            padding: "1rem 1.25rem",
-                            boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
-                        }}
-                    >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <h3 style={{ margin: 0 }}>
-                                {groupModalCategory ? `Oppmøte i ${groupModalCategory}` : "Oppmøte"}
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={closeGroupModal}
-                                style={{
-                                    border: "none",
-                                    background: "transparent",
-                                    fontSize: "1.2rem",
-                                    cursor: "pointer",
-                                }}
-                                aria-label="Lukk"
-                                title="Lukk"
-                            >
-                                ×
-                            </button>
-                        </div>
+                {/* Øvre del: statuskort eller kode/QR */}
 
-                        {modalTimes.length === 0 ? (
-                            <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
-                                Ingen timer er definert i denne gruppen enda.
+                <section>
+                    {statsLoading ? (
+                        <LoadingSpinner/>
+                    ) : stats.length === 0 ? (
+                        <p className="fs-0_9 text-gray-500">
+                            Ingen registrerte timer for denne terminen ennå.
+                        </p>
+                    ) : (
+                        <>
+                            <h2>Min oppmøtebok</h2>
+                            <p className="thinFont opaqueFont">Her finner du alle fullførte<br/> og fremtidige oppmøter.
                             </p>
-                        ) : (
-                            <ul style={{ listStyle: "none", padding: 0, marginTop: "0.75rem" }}>
-                                {modalTimes.map((t) => (
-                                    <li
-                                        key={t.id}
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "space-between",
-                                            padding: "0.35rem 0",
-                                            borderBottom: "1px solid #f3f4f6",
-                                        }}
-                                    >
-                                        <span>{t.name}</span>
-                                        <span
+                            <table className="table-container">
+                                <tbody>
+                                {stats.map((s) => {
+                                    const metRequirement =
+                                        s.requiredCount != null &&
+                                        s.attendedCount >= s.requiredCount;
+
+                                    return (
+                                        <tr
+                                            key={s.category}
+                                            onClick={() => openGroupModal(s.category)}
+                                        >
+                                            <td className="requirement-meet-icon">
+                                                {metRequirement ? (
+                                                    <img src="/check-white.svg" alt="Checkmark-icon"/>
+                                                ) : (
+                                                    <></>
+                                                )}
+                                            </td>
+                                            <td className="class-overview thinFont smal">
+                                                {s.category}
+                                            </td>
+                                            <td className="spacedFont">
+                                                {s.totalSessions > 0
+                                                    ? `${s.attendedCount}/${s.totalSessions}`
+                                                    : s.attendedCount}
+                                            </td>
+                                            <td className="required-classes">
+                                                {s.requiredCount ?? "-"}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                                </tbody>
+                            </table>
+                            <h2>Godkjent</h2>
+                            <p className="thinFont opaqueFont">
+                                Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd.Lykke til på eksamen!
+                            </p>
+                        </>
+                    )}
+                </section>
+
+                {/* Modal: detaljer for valgt gruppe */}
+                {groupModalOpen && (
+                    <div
+                        style={{
+                            position: "fixed",
+                            inset: 0,
+                            backgroundColor: "rgba(15,23,42,0.35)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            zIndex: 50,
+                        }}
+                        onClick={closeGroupModal}
+                    >
+                        <div
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                                width: "100%",
+                                maxWidth: "420px",
+                                backgroundColor: "#ffffff",
+                                borderRadius: "1rem",
+                                padding: "1rem 1.25rem",
+                                boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                            }}
+                        >
+                            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+                                <h3 style={{margin: 0}}>
+                                    {groupModalCategory ? `Oppmøte i ${groupModalCategory}` : "Oppmøte"}
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={closeGroupModal}
+                                    style={{
+                                        border: "none",
+                                        background: "transparent",
+                                        fontSize: "1.2rem",
+                                        cursor: "pointer",
+                                    }}
+                                    aria-label="Lukk"
+                                    title="Lukk"
+                                >
+                                    ×
+                                </button>
+                            </div>
+
+                            {modalTimes.length === 0 ? (
+                                <p style={{fontSize: "0.9rem", color: "#6b7280"}}>
+                                    Ingen timer er definert i denne gruppen enda.
+                                </p>
+                            ) : (
+                                <ul style={{listStyle: "none", padding: 0, marginTop: "0.75rem"}}>
+                                    {modalTimes.map((t) => (
+                                        <li
+                                            key={t.id}
                                             style={{
-                                                display: "inline-block",
-                                                padding: "0.15rem 0.5rem",
-                                                borderRadius: "999px",
-                                                backgroundColor: t.attended ? "#dcfce7" : "#fee2e2",
-                                                color: t.attended ? "#166534" : "#991b1b",
-                                                fontSize: "0.8rem",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "space-between",
+                                                padding: "0.35rem 0",
+                                                borderBottom: "1px solid #f3f4f6",
                                             }}
                                         >
+                                            <span>{t.name}</span>
+                                            <span
+                                                style={{
+                                                    display: "inline-block",
+                                                    padding: "0.15rem 0.5rem",
+                                                    borderRadius: "999px",
+                                                    backgroundColor: t.attended ? "#dcfce7" : "#fee2e2",
+                                                    color: t.attended ? "#166534" : "#991b1b",
+                                                    fontSize: "0.8rem",
+                                                }}
+                                            >
                                             {t.attended ? "Registrert" : "Mangler"}
                                         </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
 
-                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.75rem" }}>
-                            <button
-                                type="button"
-                                onClick={closeGroupModal}
-                                style={{
-                                    padding: "0.35rem 0.8rem",
-                                    borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    background: "#fff",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Lukk
-                            </button>
+                            <div style={{display: "flex", justifyContent: "flex-end", marginTop: "0.75rem"}}>
+                                <button
+                                    type="button"
+                                    onClick={closeGroupModal}
+                                    style={{
+                                        padding: "0.35rem 0.8rem",
+                                        borderRadius: "999px",
+                                        border: "1px solid #d1d5db",
+                                        background: "#fff",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Lukk
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
-        {showProfile && (
-            <ProfileModal
-                uid={user.uid}
-                role={user.role}
-                email={user.email}
-                displayName={user.displayName}
-                onClose={() => setShowProfile(false)}
-            />
-        )}
+                )}
+            </div>
         </>
     );
 }

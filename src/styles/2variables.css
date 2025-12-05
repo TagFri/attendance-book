@@ -1,0 +1,72 @@
+/* BASIC COLORS */
+:root {
+    --color-black: #262626;
+    --color-white: #FFFFFF;
+    --color-yellow-l: #FFE8D1;
+    --color-yellow-m: #FFC97D;
+    --color-yellow-f: #FF9D00;
+    --color-red-l: #FFDFDE;
+    --color-red-f: #FF5961;
+
+}
+/* COLOUR STANDARDS */
+*, h1, h2, h3, h4, h5, h6, p, input, a, li {
+    font-family: "Helvetica", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--color-black);
+}
+
+/* Color scheme */
+:root {
+    --color-background: var(--color-white);
+    --color-footer-background: var(--color-yellow-l);
+    --color-card-background: var(--color-white);
+}
+
+/* ELEMENT COLOURS */
+:root {
+    /* BUTTONS */
+    --button-color: var(--color-yellow-f);
+    --button-text-color: var(--color-black);
+    --btn-hover-font-color: var(--color-black);
+
+    /* INPUTS */
+    --color-input-borderline: var(--color-black);
+
+}
+
+/* LIGHT AND DARKMODE STYLES */
+/*body[data-theme="light"] {
+    --color-background: ;
+    --color-footer-background: ;
+    --color-font: ;
+    --color-p: ;
+    --color-h: ;
+    --color-link: ;
+    --color-tooltip-text: ;
+    --button-color: ;
+    --button-text-color: ;
+    --btn-hover-font-color: ;
+    --color-input-background: ;
+    --color-input-borderline: ;
+    --color-input-field: ;
+    --color-input-container-borderline: ;
+    --color-hr: ;
+}
+body[data-theme="dark"] {
+    --color-background: ;
+    --color-footer-background: ;
+    --color-font: ;
+    --color-p: ;
+    --color-h: ;
+    --color-link: ;
+    --color-tooltip-text: ;
+    --button-color: ;
+    --button-text-color: ;
+    --btn-hover-font-color: ;
+    --color-input-background: ;
+    --color-input-borderline: ;
+    --color-input-field: ;
+    --color-input-container-borderline: ;
+    --color-hr: ;
+}
+*/
