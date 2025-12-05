@@ -424,7 +424,7 @@ function StudentPage({user}: StudentPageProps) {
             <div className="card round-corners-full approved-term-card">
                 <h2>Godkjent</h2>
                 <p className="thinFont opaqueFont">
-                    Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd.Lykke til på eksamen!
+                    Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd. Lykke til på eksamen!
                 </p>
                 <button className="btn button-primary button-black button-next-semester">Start neste semester</button>
                 <button className="button-primary button-colorless fontUnderline">Innvilget permisjon</button>
@@ -489,7 +489,7 @@ function StudentPage({user}: StudentPageProps) {
                             </table>
                             <h2>Godkjent</h2>
                             <p className="thinFont opaqueFont">
-                                Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd.Lykke til på eksamen!
+                                Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd. Lykke til på eksamen!
                             </p>
                         </>
                     )}

@@ -99,6 +99,7 @@ footer {
 
 .card {
     padding: 0 1.8rem;
+    margin-bottom: 2rem;
 }
 
 .student-card-top, .student-overview-card {

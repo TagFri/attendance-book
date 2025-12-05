@@ -1,6 +1,6 @@
 import LoadingSpinner from "./LoadingSpinner";
 import type React from "react";
-import {useState, useEffect} from "react";
+import {useState, useEffect, useRef} from "react";
 import {useAuth} from "./hooks/useAuth";
 import {auth} from "./firebase";
 import {sendPasswordResetEmail} from "firebase/auth";
@@ -20,6 +20,10 @@ function App() {
     const [submitting, setSubmitting] = useState(false);
     const [sendingReset, setSendingReset] = useState(false);
     
+    // Refs to manage field focus
+    const emailRef = useRef<HTMLInputElement | null>(null);
+    const passwordRef = useRef<HTMLInputElement | null>(null);
+    
     // Auto-clear auth messages after 3 seconds
     useEffect(() => {
         if (!authError) return;
@@ -32,6 +36,18 @@ function App() {
         const t = setTimeout(() => setAuthSuccess(null), 3000);
         return () => clearTimeout(t);
     }, [authSuccess]);
+
+    // On successful login, scroll to the top of the page
+    useEffect(() => {
+        if (user) {
+            try {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            } catch {
+                // fallback for environments without smooth scroll support
+                window.scrollTo(0, 0);
+            }
+        }
+    }, [user]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -107,6 +123,14 @@ function App() {
                                        type="email"
                                        value={email}
                                        onChange={(e) => setEmail(e.target.value)}
+                                       ref={emailRef}
+                                       onKeyDown={(e) => {
+                                           if (e.key === "Enter") {
+                                               e.preventDefault();
+                                               passwordRef.current?.focus();
+                                           }
+                                       }}
+                                       enterKeyHint="next"
                                 />
                             </div>
                             <div className="input-group">
@@ -115,6 +139,8 @@ function App() {
                                        type="password"
                                        value={password}
                                        onChange={(e) => setPassword(e.target.value)}
+                                       ref={passwordRef}
+                                       enterKeyHint="go"
                                 />
                             </div>
 
