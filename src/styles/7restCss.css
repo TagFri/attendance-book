@@ -86,6 +86,9 @@ footer {
 #loginMan {
     margin: 0 auto;
     width: 20rem;
+    img {
+        height: 10rem;
+    }
 }
 
 .login-card {
