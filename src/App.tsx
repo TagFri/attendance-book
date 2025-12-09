@@ -115,12 +115,12 @@ function App() {
                         <div id="loginMan">
                             <img src="/login-man.svg" alt="Logo" className=""/>
                         </div>
-                        <div className="card round-corners-full login-card">
+                        <div className="card round-corners-whole-f login-card">
                             <h1>Velkommen tilbake</h1>
                             <form onSubmit={handleSubmit}>
                                 <div className="input-group">
                                     <label className="input-label">Mobil / epost</label>
-                                    <input className="input-field round-corners-half"
+                                    <input className="input-field round-corners-whole-h"
                                            type="email"
                                            value={email}
                                            onChange={(e) => setEmail(e.target.value)}
@@ -136,7 +136,7 @@ function App() {
                                 </div>
                                 <div className="input-group">
                                     <label className="input-label">Passord</label>
-                                    <input className="input-field round-corners-half"
+                                    <input className="input-field round-corners-whole-h"
                                            type="password"
                                            value={password}
                                            onChange={(e) => setPassword(e.target.value)}
@@ -148,7 +148,7 @@ function App() {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="button-primary button-black round-corners-half"
+                                    className="button-primary button-black round-corners-whole-h"
                                 >
                                     {submitting ? "Logger inn..." : "Logg inn"}
                                 </button>

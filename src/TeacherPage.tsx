@@ -20,9 +20,10 @@ import {
 } from "firebase/firestore";
 import { QRCodeCanvas } from "qrcode.react";
 import LoadingSpinner from "./LoadingSpinner";
-import { useTermOptions, labelFromTerm } from "./terms";
+import {useTermOptions, labelFromTerm, shortLabelFromTerm} from "./terms";
 import ProfileModal from "./ProfileModal";
 import { toast } from "sonner";
+import {termLabel, termShortLabel} from "./termConfig.ts";
 
 type TeacherPageProps = {
     user: AppUser;
@@ -69,6 +70,7 @@ type RecentTime = {
     category: string;
     term: number;
     lastAt?: Timestamp;
+    createdAt?: Timestamp;
 };
 
 function TeacherPage({ user }: TeacherPageProps) {
@@ -607,16 +609,9 @@ function TeacherPage({ user }: TeacherPageProps) {
 
     return (
         <>
-            <div className="card teacher-card-top round-border-top">
-                <div className="studentInfo">
-                    <h2>{user.displayName || user.email}</h2>
-                    <p className="thinFont smallText opaqueFont">Underviser</p>
-                </div>
-                <img src="/card-man.svg" alt="Student-profile-placeholder"/>
-            </div>
-            <div className="card teacher-card-bottom round-border-bottom">
+                <div className="card teacher-card round-corners-whole-f">
                 <h2>
-                    Registrer oppmøte
+                    Finn timen din
                 </h2>
 
                 {/* Termin øverst, time under */}
@@ -654,34 +649,40 @@ function TeacherPage({ user }: TeacherPageProps) {
                             }
 
                             return (
-                                <select
-                                    value={selectedTerm ?? ""}
-                                    onChange={(e) => {
-                                        const raw = e.target.value;
-                                        const val = raw === "" ? null : parseInt(raw, 10);
-                                        setSelectedTerm(val);
-                                        setSearchTerm("");
-                                        setShowSuggestions(false);
-                                        setActiveSession(null);
-                                        setAttendees([]);
-                                        // Etter valg av termin: fokuser time-input for rask skriving (mobil/desktop)
-                                        if (val != null) {
-                                            setTimeout(() => {
-                                                searchInputRef.current?.focus();
-                                            }, 0);
-                                        }
-                                    }}
-                                    className="input-field input-full"
-                                >
-                                    <option value="" disabled>
-                                        Velg modul
-                                    </option>
+                                <div style={{
+                                    display: "flex",
+                                    gap: "0.5rem",
+                                    flexWrap: "wrap",
+                                    justifyContent: "center"
+                                }}>
                                     {options.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => {
+                                                const val = opt.value;
+                                                setSelectedTerm(val);
+                                                setSearchTerm("");
+                                                setShowSuggestions(false);
+                                                setActiveSession(null);
+                                                setAttendees([]);
+                                                // Etter valg av termin: fokuser time-input for rask skriving (mobil/desktop)
+                                                setTimeout(() => {
+                                                    searchInputRef.current?.focus();
+                                                }, 0);
+                                            }}
+                                            className={`button-small button-colorless button-border ${selectedTerm === opt.value ? 'button-yellow' : 'button-opacity'}`}
+                                            ref={(el) => {
+                                                // Auto-select first button when rendered
+                                                if (el && opt === options[0] && selectedTerm === null) {
+                                                    el.click();
+                                                }
+                                            }}
+                                        >
                                             {opt.label}
-                                        </option>
+                                        </button>
                                     ))}
-                                </select>
+                                </div>
                             );
                         })()}
                     </div>
@@ -697,7 +698,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                             onFocus={() => {
                                 if (selectedTerm && searchTerm.trim().length > 0) setShowSuggestions(true);
                             }}
-                            placeholder={selectedTerm ? "Start å skrive navnet på timen..." : "Velg modul først"}
+                            placeholder={selectedTerm ? "Skriv navnet på timen" : "Velg modul først"}
                             disabled={!selectedTerm}
                             className="input-field input-full"
                         />
@@ -747,37 +748,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                             </ul>
                         )}
                     </div>
-                    {/* Nylig registrerte timer (kun når ingen aktiv økt) */}
-                    {!activeSession && recentTimes.length > 0 && (
-                        <section style={{
-                            marginTop: "1.5rem",
-                            display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <div style={{ width: "100%", maxWidth: 520 }}>
-                                <h4 style={{ textAlign: "center", marginTop: 0 }}>Nylig registrerte timer</h4>
-                                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                                    {recentTimes.map((it) => (
-                                        <li key={it.timeId} style={{ display: "flex", alignItems: "left", justifyContent: "start", padding: "0.5rem 0", borderBottom: "1px solid #f3f4f6" }}>
-                                            <div>
-                                                <div>{labelFromTerm(termOptions, it.term)}</div>
-                                                <div>
-                                                    {it.name}
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleOpenRecent(it)}
-                                                className="button-small button-black"
-                                            >
-                                                Åpne
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        </section>
-                    )}
                 </section>
-
                 {activeSession && (
                         <section
                             ref={sessionRef}
@@ -863,7 +834,7 @@ function TeacherPage({ user }: TeacherPageProps) {
 
                             <hr style={{ margin: "1rem 0" }} />
 
-                            <h4>Registrerte studenter</h4>
+                            <h4>{attendees.length} registrerte studenter</h4>
                             {attendees.length === 0 ? (
                                 <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
                                     Ingen har registrert seg ennå.
@@ -938,6 +909,43 @@ function TeacherPage({ user }: TeacherPageProps) {
                     )}
             </div>
 
+                    {/* Nylig registrerte timer (kun når ingen aktiv økt) */}
+                    { recentTimes.length > 0 && (
+                        <div className="card round-corners-whole-f teacher-recent-sessions">
+                            <div>
+                                <h2>Nylige timer</h2>
+                                <p>Her finner du alle timer registert siste 4 timene.</p>
+                                <table className="table-container">
+                                    <tbody>
+                                    {recentTimes.map((it) => (
+                                        <tr key={it.timeId}>
+                                            <td>
+                                                <p> {it.name}
+                                                </p>
+                                                <p className="thinFont opaqueFont">
+                                                    Kl: {it.createdAt ? new Date(it.createdAt.toDate()).toLocaleTimeString('nb-NO', {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    }) : '-'}
+                                                    {termLabel(it.term)}
+                                                </p>
+                                            </td>
+                                            <td>
+                                                <button
+                                                    className="button-small button-white boldFont"
+                                                    type="button"
+                                                    onClick={() => void handleOpenRecent(it)}
+                                                >
+                                                    Åpne
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
             <br />
             <div className="page-card page-card--session"
             style={{

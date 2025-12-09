@@ -19,6 +19,7 @@
 :root {
     --color-background: var(--color-white);
     --color-footer-background: var(--color-yellow-l);
+    --color-primary: var(--color-yellow-l);
     --color-card-background: var(--color-white);
 }
 

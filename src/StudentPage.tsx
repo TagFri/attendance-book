@@ -11,6 +11,8 @@ import {
     getDoc,
     setDoc,
     Timestamp,
+    serverTimestamp,
+    updateDoc,
 } from "firebase/firestore";
 import QrScanner from "./QrScanner";
 import ErrorBoundary from "./ErrorBoundary";
@@ -52,8 +54,11 @@ function StudentPage({user}: StudentPageProps) {
     const [code, setCode] = useState("");
     const [loading, setLoading] = useState(false);
 
-
-    const selectedTerm = user.term ?? 11;
+    // Lokal visningstilstand for termin og godkjent-status, slik at UI oppdateres umiddelbart
+    const [selectedTerm, setSelectedTerm] = useState<number>(user.term ?? 11);
+    const [approvedCurrentTerm, setApprovedCurrentTerm] = useState<boolean>(
+        user.approvedCurrentTerm ?? false
+    );
 
     const [stats, setStats] = useState<CategoryStat[]>([]);
     const [statsLoading, setStatsLoading] = useState(false);
@@ -82,6 +87,50 @@ function StudentPage({user}: StudentPageProps) {
         setLastSessionName(null);
         setCode("");
         setScanning(false);
+    };
+
+    // Hold lokal state i sync når user-propen endres (for eksempel ved innlogging)
+    useEffect(() => {
+        if (typeof user.term === "number") setSelectedTerm(user.term);
+        setApprovedCurrentTerm(!!user.approvedCurrentTerm);
+    }, [user.term, user.approvedCurrentTerm]);
+
+    // Hent eller opprett stabil anonymisert ID (authUid) for brukeren
+    // Lagres i users/{uid}.authUid og i localStorage for raskere tilgang
+    const getOrCreateAuthUid = async (): Promise<string> => {
+        try {
+            const userRef = doc(db, "users", user.uid);
+            const snap = await getDoc(userRef);
+            const existing = snap.exists() ? (snap.data() as any)?.authUid : null;
+            if (typeof existing === "string" && existing.length >= 8) return existing;
+
+            // Fallback: sjekk localStorage for stabil ID per bruker
+            const lsKey = `authUid:${user.uid}`;
+            let anon = localStorage.getItem(lsKey);
+            if (!anon) {
+                // Lag en ny base64url-ID (16 byte)
+                try {
+                    const bytes = new Uint8Array(16);
+                    crypto.getRandomValues(bytes);
+                    anon = Array.from(bytes)
+                        .map((b) => String.fromCharCode(b))
+                        .join("");
+                    // @ts-ignore
+                    anon = btoa(anon).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+                } catch {
+                    // Sikkerhets-fallback om crypto ikke er tilgjengelig
+                    anon = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+                }
+                localStorage.setItem(lsKey, anon);
+            }
+
+            // Persistér til Firestore for gjenbruk på andre enheter
+            await setDoc(userRef, { authUid: anon }, { merge: true });
+            return anon;
+        } catch (e) {
+            console.warn("Kunne ikke generere/lagre authUid, bruker fallback i minnet.", e);
+            return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        }
     };
 
     const registerAttendance = async (inputCode: string) => {
@@ -141,6 +190,9 @@ function StudentPage({user}: StudentPageProps) {
             setScanning(false);
             setCode("");
             setStatsVersion((v) => v + 1);
+
+            // Etter vellykket registrering: sjekk om oppmøteboken er komplett og aksepter den
+            void checkAndSubmitAttendanceBook();
         } catch (err) {
             console.error(err);
             setStatus("error");
@@ -332,6 +384,96 @@ function StudentPage({user}: StudentPageProps) {
         setGroupModalCategory(null);
     };
 
+
+    // Sjekk om alle påkrevde grupper for denne terminen er fullført, og registrer akseptert bok
+    const checkAndSubmitAttendanceBook = async () => {
+        try {
+            const term = selectedTerm;
+
+            // Hent krav pr kategori for terminen
+            const reqSnap = await getDocs(query(collection(db, "requirements"), where("term", "==", term)));
+            const requirements = reqSnap.docs.map((d) => d.data() as any) as { category: string; requiredCount: number }[];
+
+            if (!requirements.length) return; // Ingen krav definert → ingen aksept å registrere
+
+            // Finn alle sessions i terminen
+            const sessSnap = await getDocs(query(collection(db, "sessions"), where("term", "==", term)));
+            const sessions: { id: string; category?: string }[] = sessSnap.docs.map((d) => {
+                const data = d.data() as any;
+                return { id: d.id, category: typeof data?.category === "string" ? data.category : undefined };
+            });
+
+            // Tell opp oppmøte per kategori
+            const attendedMap = new Map<string, number>();
+            for (const s of sessions) {
+                if (!s.category) continue;
+                const attRef = doc(db, "sessions", s.id, "attendance", user.uid);
+                const a = await getDoc(attRef);
+                if (a.exists()) {
+                    attendedMap.set(s.category, (attendedMap.get(s.category) ?? 0) + 1);
+                }
+            }
+
+            // Vurder om alle påkrevde kategorier er oppfylt
+            const allFulfilled = requirements.every((r) => {
+                const needed = typeof r.requiredCount === "number" ? r.requiredCount : 0;
+                if (needed <= 0) return true;
+                const have = attendedMap.get(r.category) ?? 0;
+                return have >= needed;
+            });
+
+            if (!allFulfilled) return;
+
+
+            // Sørg for authUid (stabil anonym ID for bruker, ikke PII)
+            const authUid = await getOrCreateAuthUid();
+
+            // Skriv akseptert bok hvis ikke finnes fra før (unik per authUid+term)
+            const accId = `${authUid}_${term}`;
+            const accRef = doc(db, "attendanceBook", accId);
+            const has = await getDoc(accRef);
+            if (has.exists()) return; // Allerede registrert
+
+            await setDoc(accRef, {
+                authUid,
+                term,
+                acceptedBy: "system",
+                acceptedTimeStamp: serverTimestamp(),
+            });
+
+            // Sett brukerfeltet approvedCurrentTerm = true når terminen godkjennes
+            try {
+                await updateDoc(doc(db, "users", user.uid), {
+                    approvedCurrentTerm: true,
+                });
+                setApprovedCurrentTerm(true);
+            } catch (e) {
+                console.warn("Kunne ikke oppdatere approvedCurrentTerm på bruker:", e);
+            }
+        } catch (e) {
+            console.warn("Klarte ikke å registrere akseptert oppmøtebok:", e);
+        }
+    };
+
+    // Håndter "Start neste semester" → øk term +1, nullstill approvedCurrentTerm
+    const handleStartNextSemester = async () => {
+        const nextTerm = (selectedTerm ?? 0) + 1;
+        try {
+            await updateDoc(doc(db, "users", user.uid), {
+                term: nextTerm,
+                approvedCurrentTerm: false,
+            });
+        } catch (e) {
+            console.warn("Kunne ikke oppdatere bruker ved semesterbytte:", e);
+        } finally {
+            // Oppdater UI lokalt uansett, for umiddelbar feedback
+            setSelectedTerm(nextTerm);
+            setApprovedCurrentTerm(false);
+            // Trigger ny innlasting av statistikk for ny termin
+            setStatsVersion((v) => v + 1);
+        }
+    };
+
     // Manuell kodeinput (fra OTP-komponenten) → auto når 6 siffer
     const handleCodeChange = (nextValue: string) => {
         const raw = (nextValue || "").replace(/\D/g, "");
@@ -356,14 +498,14 @@ function StudentPage({user}: StudentPageProps) {
 
     return (
         <>
-                <div className="card student-card student-card-top round-border-top">
+                <div className="card student-card student-card-top round-corner-top-f">
                     <div className="studentInfo">
                         <h2>{user.displayName || user.email}</h2>
                         <p className="thinFont smallText opaqueFont">{labelFromTerm(termOptions, selectedTerm)}</p>
                     </div>
                     <img src="/card-man.svg" alt="Student-profile-placeholder"/>
                 </div>
-                <div className="card student-card student-card-bottom round-border-bottom">
+                <div className="card student-card student-card-bottom round-corner-bottom-f">
 
 
                     {status === "success" ? (
@@ -383,18 +525,15 @@ function StudentPage({user}: StudentPageProps) {
                         </>
                     ) : status === "error" ? (
                         <>
-                            {/* OPPMØTE IKKE REGISTERT */}
-                            <div className="">
-                                ❌
-                            </div>
-                            <h3 className="">
-                                Kunne ikke registrere oppmøte
-                            </h3>
-                            {statusMessage && (
-                                <p className="m-0 mb-1 fs-0_95 text-gray-700">
-                                    {statusMessage}
+                            <div className="registered-error">
+                                {/* OPPMØTE REGISTERT */}
+                                <img src="/error.svg" alt="Error-icon"/>
+                                <h3 className="">
+                                    Kunne ikke registrere oppmøte
+                                </h3>
+                                <p className="">Fant ingen gruppetimer med denne koden. Sjekk at økten er åpen hos lærer.
                                 </p>
-                            )}
+                            </div>
                         </>
                     ) : (
                         <>
@@ -491,16 +630,23 @@ function StudentPage({user}: StudentPageProps) {
 
 
                 </div>
-            <div className="card round-corners-full approved-term-card">
-                <h2>Godkjent</h2>
-                <p className="thinFont opaqueFont">
-                    Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd. Lykke
-                    til på eksamen!
-                </p>
-                <button className="btn button-primary button-black button-next-semester">Start neste semester</button>
-                <button className="button-primary button-colorless fontUnderline">Innvilget permisjon</button>
-            </div>
-            <div className="card round-corners-full student-overview-card">
+            {approvedCurrentTerm && (
+                <div className="card round-corners-whole-f approved-term-card attendance-approved">
+                    <h2>Godkjent</h2>
+                    <p className="thinFont opaqueFont">
+                        Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd. Lykke
+                        til på eksamen!
+                    </p>
+                    <button
+                        className="btn button-primary button-black button-next-semester"
+                        onClick={handleStartNextSemester}
+                    >
+                        Start neste semester
+                    </button>
+                    <button className="button-primary button-colorless fontUnderline">Har innvilget permisjon</button>
+                </div>
+            )}
+            <div className="card round-corners-whole-f student-overview-card">
 
                 {inactive && (
                     <p className="text-red text-center">
@@ -558,11 +704,15 @@ function StudentPage({user}: StudentPageProps) {
                                 })}
                                 </tbody>
                             </table>
-                            <h2>Godkjent</h2>
-                            <p className="thinFont opaqueFont">
-                                Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er
-                                oppnådd. Lykke til på eksamen!
-                            </p>
+                            {approvedCurrentTerm && (
+                                <>
+                                    <h2 className="attendance-approved">Godkjent</h2>
+                                    <p className="thinFont opaqueFont attendance-approved">
+                                        Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er
+                                        oppnådd. Lykke til på eksamen!
+                                    </p>
+                                </>
+                            )}
                         </>
                     )}
                 </section>
@@ -634,15 +784,7 @@ function StudentPage({user}: StudentPageProps) {
                                             }}
                                         >
                                             <span>{t.name}</span>
-                                            <span
-                                                style={{
-                                                    display: "inline-block",
-                                                    padding: "0.15rem 0.5rem",
-                                                    borderRadius: "999px",
-                                                    backgroundColor: t.attended ? "#dcfce7" : "#fee2e2",
-                                                    color: t.attended ? "#166534" : "#991b1b",
-                                                    fontSize: "0.8rem",
-                                                }}
+                                            <span className="button-small button-thin button-black"
                                             >
                                             {t.attended ? "Registrert" : "Mangler"}
                                         </span>
