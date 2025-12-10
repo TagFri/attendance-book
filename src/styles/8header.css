@@ -2,11 +2,20 @@
     display: flex;
     justify-content: space-between;
     flex-direction: row;
-    max-width: 400px;
+    max-width: 500px;
     margin: 2rem auto 0;
-    img {
-        height: 39px;
+    .left-header {
+        display: flex;
+        align-items: flex-start;
     }
+    img {
+        height: 2.75rem;
+    }
+}
+
+/* Wider header for admin views */
+.header-container.admin {
+    max-width: 1000px;
 }
 
 .header-buttons {

@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import LoadingSpinner from "./LoadingSpinner";
-import { useAuth } from "./hooks/useAuth";
-import { auth, db, secondaryAuth } from "./firebase";
+import {useAuth} from "./hooks/useAuth";
+import {auth, db, secondaryAuth} from "./firebase";
 // import { signOut } from "firebase/auth";
 import {
     collection,
@@ -18,11 +18,11 @@ import {
     serverTimestamp,
     Timestamp,
 } from "firebase/firestore";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { labelFromTerm, shortLabelFromTerm } from "./terms";
+import {createUserWithEmailAndPassword} from "firebase/auth";
+import {labelFromTerm, shortLabelFromTerm} from "./terms";
 import ProfileModal from "./ProfileModal";
-import { getFunctions, httpsCallable } from "firebase/functions";
-import { toast } from "sonner";
+import {getFunctions, httpsCallable} from "firebase/functions";
+import {toast} from "sonner";
 
 // ---------- Typer ----------
 
@@ -70,7 +70,7 @@ function generateTempPassword(): string {
 // ---------- Brukeradministrasjon ----------
 
 const UsersAdmin: React.FC = () => {
-    const { user: authUser } = useAuth();
+    const {user: authUser} = useAuth();
     const [allUsers, setAllUsers] = useState<AdminUserRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -78,30 +78,18 @@ const UsersAdmin: React.FC = () => {
         "students"
     );
 
-    // Lærere: filter + sort
+    // Lærere: filter (sortering fjernet)
     const [teacherTermFilter, setTeacherTermFilter] = useState<number | "all">(
         "all"
     );
-    const [teacherSortKey, setTeacherSortKey] = useState<
-        "name" | "email" | "phone"
-    >("name");
-    const [teacherSortDir, setTeacherSortDir] = useState<"asc" | "desc">("asc");
 
-    // Studenter: filter + sort
+    // Studenter: filter (sortering fjernet)
     const [studentTermFilter, setStudentTermFilter] = useState<number | "all">(
         "all"
     );
-    const [studentSortKey, setStudentSortKey] = useState<
-        "name" | "email" | "phone"
-    >("name");
-    const [studentSortDir, setStudentSortDir] = useState<"asc" | "desc">("asc");
 
-    // Admins: filter + sort
+    // Admins: filter (sortering fjernet)
     const [adminTermFilter, setAdminTermFilter] = useState<number | "all">("all");
-    const [adminSortKey, setAdminSortKey] = useState<
-        "name" | "email" | "phone"
-    >("name");
-    const [adminSortDir, setAdminSortDir] = useState<"asc" | "desc">("asc");
 
     // --- Term options loaded from Firestore (for filters and modals) ---
     type TermDocOption = { value: number; label: string; order?: number };
@@ -110,7 +98,7 @@ const UsersAdmin: React.FC = () => {
         return dbTerms
             .slice()
             .sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value))
-            .map((t) => ({ value: t.value, label: t.label || `Termin ${t.value}` }));
+            .map((t) => ({value: t.value, label: t.label || `Termin ${t.value}`}));
     }, [dbTerms]);
 
     // Nåværende admins modultilganger (allowedTerms) og superadmin-status
@@ -171,7 +159,7 @@ const UsersAdmin: React.FC = () => {
                         if (typeof value !== "number") return null;
                         const label = typeof data?.label === "string" ? data.label : "";
                         const order = typeof data?.order === "number" ? data.order : undefined;
-                        return { value, label, order } as TermDocOption;
+                        return {value, label, order} as TermDocOption;
                     })
                     .filter(Boolean) as TermDocOption[];
                 list.sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value));
@@ -241,7 +229,7 @@ const UsersAdmin: React.FC = () => {
                     approved: Boolean((snap.data() as any).approved),
                     approvedAt: (snap.data() as any).approvedAt ?? null,
                 }
-                : { approved: false, approvedAt: null };
+                : {approved: false, approvedAt: null};
 
             setBookApprovals((prev) => ({
                 ...prev,
@@ -259,13 +247,13 @@ const UsersAdmin: React.FC = () => {
         if (!uid || term == null) return;
         try {
             const ref = doc(db, "users", uid, "books", String(term));
-            await setDoc(ref, { approved: true, approvedAt: serverTimestamp() }, { merge: true });
+            await setDoc(ref, {approved: true, approvedAt: serverTimestamp()}, {merge: true});
             // Optimistisk oppdatering
             setBookApprovals((prev) => ({
                 ...prev,
                 [uid]: {
                     ...(prev[uid] ?? {}),
-                    [term]: { approved: true, approvedAt: Timestamp.now() },
+                    [term]: {approved: true, approvedAt: Timestamp.now()},
                 },
             }));
         } catch (e) {
@@ -278,12 +266,12 @@ const UsersAdmin: React.FC = () => {
         if (!uid || term == null) return;
         try {
             const ref = doc(db, "users", uid, "books", String(term));
-            await setDoc(ref, { approved: false, approvedAt: null }, { merge: true });
+            await setDoc(ref, {approved: false, approvedAt: null}, {merge: true});
             setBookApprovals((prev) => ({
                 ...prev,
                 [uid]: {
                     ...(prev[uid] ?? {}),
-                    [term]: { approved: false, approvedAt: null },
+                    [term]: {approved: false, approvedAt: null},
                 },
             }));
         } catch (e) {
@@ -293,21 +281,21 @@ const UsersAdmin: React.FC = () => {
     };
 
     // Liten hjelpekomponent for å vise status i tabellen
-    const StudentApprovalStatus: React.FC<{ uid: string; term: number }> = ({ uid, term }) => {
+    const StudentApprovalStatus: React.FC<{ uid: string; term: number }> = ({uid, term}) => {
         const approval = getCachedApproval(uid, term);
         useEffect(() => {
             if (approval === undefined) void loadApproval(uid, term);
         }, [uid, term, approval]);
 
-        if (!approval) return <span style={{ color: "#9ca3af" }}>—</span>;
+        if (!approval) return <span style={{color: "#9ca3af"}}>—</span>;
         if (approval.approved) {
             const ts = approval.approvedAt as Timestamp | null | undefined;
             const title = ts ? new Date(ts.toDate()).toLocaleString("nb-NO") : undefined;
             return (
-                <span title={title} style={{ color: "#16a34a", fontSize: "1rem" }}>✅</span>
+                <span title={title} style={{color: "#16a34a", fontSize: "1rem"}}>✅</span>
             );
         }
-        return <span style={{ color: "#9ca3af" }}>—</span>;
+        return <span style={{color: "#9ca3af"}}>—</span>;
     };
 
     // Modal for admins (create/edit)
@@ -343,13 +331,6 @@ const UsersAdmin: React.FC = () => {
                         allowedTerms: data.allowedTerms ?? [],
                     };
                 });
-
-                // default: sorter på navn
-                list.sort((a, b) =>
-                    a.displayName.localeCompare(b.displayName, "nb-NO", {
-                        sensitivity: "base",
-                    })
-                );
 
                 setAllUsers(list);
             } catch (err) {
@@ -387,15 +368,15 @@ const UsersAdmin: React.FC = () => {
     // Krav: Alle admin skal kunne se alle andre admin → ingen gating for admins-listen.
     // Superadmin: ingen gating i det hele tatt.
     const gatedLists = (() => {
-        if (isSuperAdmin) return { teachers, students, admins };
+        if (isSuperAdmin) return {teachers, students, admins};
         const allowed = currentAdminAllowedTerms;
         const hasGate = Array.isArray(allowed) && allowed.length > 0;
-        if (!hasGate) return { teachers, students, admins };
+        if (!hasGate) return {teachers, students, admins};
         const set = new Set(allowed);
         const teachersG = teachers.filter((u) => (u.allowedTerms ?? []).some((t) => set.has(Number(t))));
         const studentsG = students.filter((u) => u.term != null && set.has(Number(u.term)));
         const adminsG = admins; // ingen gating for admins
-        return { teachers: teachersG, students: studentsG, admins: adminsG };
+        return {teachers: teachersG, students: studentsG, admins: adminsG};
     })();
     teachers = gatedLists.teachers;
     students = gatedLists.students;
@@ -421,85 +402,14 @@ const UsersAdmin: React.FC = () => {
         admins = admins.filter((u) => (u.allowedTerms ?? []).includes(tVal));
     }
 
-    // Sorter lærere
-    teachers.sort((a, b) => {
-        const getField = (u: AdminUserRow) => {
-            if (teacherSortKey === "name") return u.displayName ?? "";
-            if (teacherSortKey === "email") return u.email ?? "";
-            return u.phone ?? "";
-        };
-        const va = String(getField(a) ?? "").toLowerCase();
-        const vb = String(getField(b) ?? "").toLowerCase();
-        if (va < vb) return teacherSortDir === "asc" ? -1 : 1;
-        if (va > vb) return teacherSortDir === "asc" ? 1 : -1;
-        return 0;
-    });
-
-    // Sorter studenter
-    students.sort((a, b) => {
-        const getField = (u: AdminUserRow) => {
-            if (studentSortKey === "name") return u.displayName ?? "";
-            if (studentSortKey === "email") return u.email ?? "";
-            return u.phone ?? "";
-        };
-        const va = String(getField(a) ?? "").toLowerCase();
-        const vb = String(getField(b) ?? "").toLowerCase();
-        if (va < vb) return studentSortDir === "asc" ? -1 : 1;
-        if (va > vb) return studentSortDir === "asc" ? 1 : -1;
-        return 0;
-    });
-
-    // Sorter admins
-    admins.sort((a, b) => {
-        const getField = (u: AdminUserRow) => {
-            if (adminSortKey === "name") return u.displayName ?? "";
-            if (adminSortKey === "email") return u.email ?? "";
-            return u.phone ?? "";
-        };
-        const va = String(getField(a) ?? "").toLowerCase();
-        const vb = String(getField(b) ?? "").toLowerCase();
-        if (va < vb) return adminSortDir === "asc" ? -1 : 1;
-        if (va > vb) return adminSortDir === "asc" ? 1 : -1;
-        return 0;
-    });
+    // Ingen sortering – behold rekkefølgen fra Firestore/filtre
 
     // Begrens til 50
     teachers = teachers.slice(0, 50);
     students = students.slice(0, 50);
     admins = admins.slice(0, 50);
 
-    const toggleTeacherSort = (key: "name" | "email" | "phone") => {
-        setTeacherSortKey((prevKey) => {
-            if (prevKey === key) {
-                setTeacherSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
-                return prevKey;
-            }
-            setTeacherSortDir("asc");
-            return key;
-        });
-    };
-
-    const toggleStudentSort = (key: "name" | "email" | "phone") => {
-        setStudentSortKey((prevKey) => {
-            if (prevKey === key) {
-                setStudentSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
-                return prevKey;
-            }
-            setStudentSortDir("asc");
-            return key;
-        });
-    };
-
-    const toggleAdminSort = (key: "name" | "email" | "phone") => {
-        setAdminSortKey((prevKey) => {
-            if (prevKey === key) {
-                setAdminSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
-                return prevKey;
-            }
-            setAdminSortDir("asc");
-            return key;
-        });
-    };
+    // Sorteringstoggling fjernet
 
     const updateUserField = async (
         docId: string,
@@ -514,9 +424,9 @@ const UsersAdmin: React.FC = () => {
     ) => {
         try {
             const ref = doc(db, "users", docId);
-            await updateDoc(ref, { [field]: value });
+            await updateDoc(ref, {[field]: value});
             setAllUsers((prev) =>
-                prev.map((u) => (u.docId === docId ? { ...u, [field]: value } : u))
+                prev.map((u) => (u.docId === docId ? {...u, [field]: value} : u))
             );
         } catch (err) {
             console.error("Feil ved oppdatering av brukerfelt:", err);
@@ -573,7 +483,7 @@ const UsersAdmin: React.FC = () => {
                 allowedTerms: editTeacherAllowedTerms,
             };
 
-            await setDoc(doc(db, "users", uid), userDoc, { merge: true });
+            await setDoc(doc(db, "users", uid), userDoc, {merge: true});
 
             setAllUsers((prev) => {
                 const next: AdminUserRow[] = [
@@ -620,8 +530,8 @@ const UsersAdmin: React.FC = () => {
                     const data = d.data() as any;
                     const existingAllowed: number[] = Array.isArray(data?.allowedTerms)
                         ? (data.allowedTerms as any[])
-                              .map((v) => (typeof v === "number" ? v : parseInt(String(v), 10)))
-                              .filter((v) => !Number.isNaN(v))
+                            .map((v) => (typeof v === "number" ? v : parseInt(String(v), 10)))
+                            .filter((v) => !Number.isNaN(v))
                         : [];
                     const unionSet = new Set<number>([...existingAllowed, ...editTeacherAllowedTerms]);
                     const merged = Array.from(unionSet);
@@ -647,7 +557,7 @@ const UsersAdmin: React.FC = () => {
                         };
                         if (rowIdx >= 0) {
                             const clone = prev.slice();
-                            clone[rowIdx] = { ...clone[rowIdx], ...nextRow };
+                            clone[rowIdx] = {...clone[rowIdx], ...nextRow};
                             return clone;
                         }
                         const next = [nextRow, ...prev];
@@ -692,7 +602,7 @@ const UsersAdmin: React.FC = () => {
                 try {
                     const functions = getFunctions(undefined, "europe-west1");
                     const updateAuthEmail = httpsCallable(functions, "adminUpdateUserEmail");
-                    await updateAuthEmail({ uid: docId, newEmail: editTeacherEmail.trim() });
+                    await updateAuthEmail({uid: docId, newEmail: editTeacherEmail.trim()});
                 } catch (e: any) {
                     console.error("adminUpdateUserEmail failed", e);
                     toast.error("Kunne ikke oppdatere lærerens e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
@@ -806,7 +716,7 @@ const UsersAdmin: React.FC = () => {
                 allowedTerms: [] as number[],
             };
 
-            await setDoc(doc(db, "users", uid), userDoc, { merge: true });
+            await setDoc(doc(db, "users", uid), userDoc, {merge: true});
 
             setAllUsers((prev) => {
                 const next: AdminUserRow[] = [
@@ -876,7 +786,7 @@ const UsersAdmin: React.FC = () => {
                         };
                         if (rowIdx >= 0) {
                             const clone = prev.slice();
-                            clone[rowIdx] = { ...clone[rowIdx], ...nextRow };
+                            clone[rowIdx] = {...clone[rowIdx], ...nextRow};
                             return clone;
                         }
                         const next = [nextRow, ...prev];
@@ -923,7 +833,7 @@ const UsersAdmin: React.FC = () => {
                 try {
                     const functions = getFunctions(undefined, "europe-west1");
                     const updateAuthEmail = httpsCallable(functions, "adminUpdateUserEmail");
-                    await updateAuthEmail({ uid: docId, newEmail: editStudentEmail.trim() });
+                    await updateAuthEmail({uid: docId, newEmail: editStudentEmail.trim()});
                 } catch (e: any) {
                     console.error("adminUpdateUserEmail failed", e);
                     toast.error("Kunne ikke oppdatere studentens e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
@@ -1020,7 +930,7 @@ const UsersAdmin: React.FC = () => {
                 allowedTerms: editAdminAllowedTerms,
             };
 
-            await setDoc(doc(db, "users", uid), userDoc, { merge: true });
+            await setDoc(doc(db, "users", uid), userDoc, {merge: true});
 
             setAllUsers((prev) => {
                 const next: AdminUserRow[] = [
@@ -1081,7 +991,7 @@ const UsersAdmin: React.FC = () => {
                 try {
                     const functions = getFunctions(undefined, "europe-west1");
                     const updateAuthEmail = httpsCallable(functions, "adminUpdateUserEmail");
-                    await updateAuthEmail({ uid: docId, newEmail: editAdminEmail.trim() });
+                    await updateAuthEmail({uid: docId, newEmail: editAdminEmail.trim()});
                 } catch (e: any) {
                     console.error("adminUpdateUserEmail failed", e);
                     toast.error("Kunne ikke oppdatere admin‑e‑post i Auth. Endringen er avbrutt. Kontroller at Cloud Function 'adminUpdateUserEmail' er deployet og at du har tilgang.");
@@ -1136,17 +1046,16 @@ const UsersAdmin: React.FC = () => {
     // ---------- RENDER ----------
 
     return (
-        <div className="mb-2">
-
+        <div className="">
             {/* Faner */}
-            <div className="flex gap-0_5 mb-0_75">
+            <div className="filter-buttons">
                 <button
                     type="button"
                     onClick={() => setActiveTab("students")}
-                    className={`flex-1 py-0_35 px-0_6 rounded-full fs-0_85 cursor-pointer ${
+                    className={` ${
                         activeTab === "students"
-                            ? "bg-green-light border-green-light text-black"
-                            : "bg-white border-gray text-gray-900"
+                            ? "button button-small button-yellow thin-border round-corners-whole25"
+                            : "button button-small button-colorless button-opacity thin-border round-corners-whole25"
                     }`}
                 >
                     Studenter
@@ -1154,10 +1063,10 @@ const UsersAdmin: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => setActiveTab("teachers")}
-                    className={`flex-1 py-0_35 px-0_6 fs-0_85 cursor-pointer ${
+                    className={`${
                         activeTab === "teachers"
-                            ? "bg-green-light border-green-light text-black"
-                            : "bg-white border-gray text-gray-900"
+                            ? "button button-small button-yellow thin-border round-corners-whole25"
+                            : "button button-small button-colorless button-opacity thin-border round-corners-whole25"
                     }`}
                 >
                     Lærere
@@ -1165,31 +1074,66 @@ const UsersAdmin: React.FC = () => {
                 <button
                     type="button"
                     onClick={() => setActiveTab("admins")}
-                    className={`flex-1 py-0_35 px-0_6 rounded-full fs-0_85 cursor-pointer ${
+                    className={`${
                         activeTab === "admins"
-                            ? "bg-green-light border-green-light text-black"
-                            : "bg-white border-gray text-gray-900"
+                            ? "button button-small button-yellow thin-border round-corners-whole25"
+                            : "button button-small button-colorless button-opacity thin-border round-corners-whole25"
                     }`}
                 >
-                    Admin
+                    Administorerer
                 </button>
             </div>
+            {/* Valgt rolle-overskrift */}
+            <h2 style={{margin: "0.5rem 0 0.75rem"}}>
+                {activeTab === "students"
+                    ? "Studenter"
+                    : activeTab === "teachers"
+                        ? "Lærere"
+                        : "Administorerer"}
+            </h2>
             {/* Globalt søk */}
-            <input
-                type="text"
-                placeholder="Søk på navn, e-post eller mobil..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full py-0_4 px-0_6 mb-0_75 rounded-md border-gray fs-0_9"
-            />
+            <div className="flex-row-center">
+                <input
+                    type="text"
+                    placeholder={
+                        activeTab === "students"
+                            ? "Søk etter student"
+                            : activeTab === "teachers"
+                                ? "Søk etter lærer"
+                                : "Søk etter administrator"
+                    }
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="input-half field-height-50 thin-border round-corners-whole25"
+                />
+                <button
+                    type="button"
+                    onClick={
+                        activeTab === "students"
+                            ? openCreateStudentModal
+                            : activeTab === "teachers"
+                                ? openCreateTeacherModal
+                                : openCreateAdminModal
+                    }
+                    className="button button-small button-colorless boldFont"
+                >
+                    <span>+</span>Oprett ny{" "}
+                    {activeTab === "students"
+                        ? "student"
+                        : activeTab === "teachers"
+                            ? "lærer"
+                            : "administrator"}
+                </button>
+
+            </div>
 
             {loading ? (
-                <LoadingSpinner />
+                <LoadingSpinner/>
             ) : (
                 <>
                     {/* LÆRERE */}
                     {activeTab === "teachers" && (
-                        <div style={{ marginBottom: "1.2rem" }}>
+                        <div style={{marginBottom: "1.2rem"}}>
                             <div
                                 style={{
                                     display: "flex",
@@ -1199,7 +1143,7 @@ const UsersAdmin: React.FC = () => {
                                     marginBottom: "0.4rem",
                                 }}
                             >
-                                <div style={{ fontSize: "0.8rem" }}>
+                                <div style={{fontSize: "0.8rem"}}>
                                     <label>
                                         <select
                                             value={teacherTermFilter === "all" ? "" : teacherTermFilter}
@@ -1225,83 +1169,20 @@ const UsersAdmin: React.FC = () => {
                                         </select>
                                     </label>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={openCreateTeacherModal}
-                                    style={{
-                                        padding: "0.3rem 0.7rem",
-                                        borderRadius: "999px",
-                                        border: "1px solid #d1d5db",
-                                        backgroundColor: "#ffffff",
-                                        fontSize: "0.8rem",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Legg til
-                                </button>
                             </div>
 
-                            <table
-                                style={{
-                                    width: "100%",
-                                    borderCollapse: "collapse",
-                                    fontSize: "0.85rem",
-                                }}
-                            >
+                            <table className="admin-table">
                                 <thead>
                                 <tr>
-                                    <th
-                                        style={{
-                                            textAlign: "left",
-                                            borderBottom: "1px solid #e5e7eb",
-                                            padding: "0.25rem",
-                                            cursor: "pointer",
-                                        }}
-                                        onClick={() => toggleTeacherSort("name")}
-                                    >
-                                        Navn{" "}
-                                        {teacherSortKey === "name" &&
-                                            (teacherSortDir === "asc" ? "▲" : "▼")}
-                                    </th>
-                                    <th
-                                        style={{
-                                            textAlign: "left",
-                                            borderBottom: "1px solid #e5e7eb",
-                                            padding: "0.25rem",
-                                            cursor: "pointer",
-                                        }}
-                                        onClick={() => toggleTeacherSort("email")}
-                                    >
-                                        E-post{" "}
-                                        {teacherSortKey === "email" &&
-                                            (teacherSortDir === "asc" ? "▲" : "▼")}
-                                    </th>
-                                    <th
-                                        style={{
-                                            textAlign: "left",
-                                            borderBottom: "1px solid #e5e7eb",
-                                            padding: "0.25rem",
-                                            cursor: "pointer",
-                                        }}
-                                        onClick={() => toggleTeacherSort("phone")}
-                                    >
-                                        Mobil{" "}
-                                        {teacherSortKey === "phone" &&
-                                            (teacherSortDir === "asc" ? "▲" : "▼")}
-                                    </th>
+                                    <th>Navn</th>
+                                    <th>E-post</th>
+                                    <th>Mobil</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 {teachers.length === 0 ? (
                                     <tr>
-                                        <td
-                                            colSpan={3}
-                                            style={{
-                                                padding: "0.4rem",
-                                                fontSize: "0.85rem",
-                                                color: "#6b7280",
-                                            }}
-                                        >
+                                        <td colSpan={3} className="admin-table__empty">
                                             Ingen lærere funnet.
                                         </td>
                                     </tr>
@@ -1310,43 +1191,28 @@ const UsersAdmin: React.FC = () => {
                                         <tr
                                             key={u.docId}
                                             onClick={() => openEditTeacherModal(u)}
-                                            style={{ cursor: "pointer" }}
+                                            className="admin-table__row--clickable"
                                         >
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
+                                            <td>
                                                 {u.displayName}
                                             </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
+                                            <td>
                                                 {u.email}
                                             </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
+                                            <td>
                                                 {u.phone ?? "—"}
                                             </td>
                                         </tr>
                                     ))
                                 )}
-                                </tbody>
+                            </tbody>
                             </table>
                         </div>
                     )}
 
                     {/* STUDENTER */}
                     {activeTab === "students" && (
-                        <div style={{ marginBottom: "1.2rem" }}>
+                        <div style={{marginBottom: "1.2rem"}}>
                             <div
                                 style={{
                                     display: "flex",
@@ -1356,7 +1222,7 @@ const UsersAdmin: React.FC = () => {
                                     marginBottom: "0.4rem",
                                 }}
                             >
-                                <div style={{ fontSize: "0.8rem" }}>
+                                <div style={{fontSize: "0.8rem"}}>
                                     <label>
                                         <select
                                             value={studentTermFilter === "all" ? "" : studentTermFilter}
@@ -1382,69 +1248,21 @@ const UsersAdmin: React.FC = () => {
                                         </select>
                                     </label>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={openCreateStudentModal}
-                                    style={{
-                                        padding: "0.3rem 0.7rem",
-                                        borderRadius: "999px",
-                                        border: "1px solid #d1d5db",
-                                        backgroundColor: "#ffffff",
-                                        fontSize: "0.8rem",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Legg til
-                                </button>
 
 
                             </div>
 
                             {students.length === 0 ? (
-                                <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+                                <p style={{fontSize: "0.85rem", color: "#6b7280"}}>
                                     Ingen studenter funnet.
                                 </p>
                             ) : (
-                                <table
-                                    style={{
-                                        width: "100%",
-                                        borderCollapse: "collapse",
-                                        fontSize: "0.85rem",
-                                    }}
-                                >
+                                <table className="admin-table">
                                     <thead>
                                     <tr>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                borderBottom: "1px solid #e5e7eb",
-                                                padding: "0.25rem",
-                                                cursor: "pointer",
-                                            }}
-                                            onClick={() => toggleStudentSort("name")}
-                                        >
-                                            Navn{" "}
-                                            {studentSortKey === "name" &&
-                                                (studentSortDir === "asc" ? "▲" : "▼")}
-                                        </th>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                borderBottom: "1px solid #e5e7eb",
-                                                padding: "0.25rem",
-                                            }}
-                                        >
-                                            Termin
-                                        </th>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                borderBottom: "1px solid #e5e7eb",
-                                                padding: "0.25rem",
-                                            }}
-                                        >
-                                            Godkjent?
-                                        </th>
+                                        <th>Navn</th>
+                                        <th>Termin</th>
+                                        <th>Status</th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -1452,31 +1270,17 @@ const UsersAdmin: React.FC = () => {
                                         <tr
                                             key={u.docId}
                                             onClick={() => openEditStudentModal(u)}
-                                            style={{ cursor: "pointer" }}
+                                            className="admin-table__row--clickable"
                                         >
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
+                                            <td>
                                                 {u.displayName}
                                             </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
+                                            <td>
                                                 {u.term != null && u.term !== undefined
-                                                    ? shortLabelFromTerm(computedTermOptions, u.term)
+                                                    ? labelFromTerm(computedTermOptions, u.term)
                                                     : "Ingen"}
                                             </td>
                                             <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
                                                 onMouseEnter={(e) => {
                                                     // Forhåndslast godkjenning når raden hovres
                                                     void loadApproval(u.docId, u.term ?? null);
@@ -1501,7 +1305,7 @@ const UsersAdmin: React.FC = () => {
 
                     {/* ADMINS */}
                     {activeTab === "admins" && (
-                        <div style={{ marginBottom: "1.2rem" }}>
+                        <div style={{marginBottom: "1.2rem"}}>
                             <div
                                 style={{
                                     display: "flex",
@@ -1511,7 +1315,7 @@ const UsersAdmin: React.FC = () => {
                                     marginBottom: "0.4rem",
                                 }}
                             >
-                                <div style={{ fontSize: "0.8rem" }}>
+                                <div style={{fontSize: "0.8rem"}}>
                                     <label>
                                         <select
                                             value={adminTermFilter === "all" ? "" : adminTermFilter}
@@ -1537,75 +1341,19 @@ const UsersAdmin: React.FC = () => {
                                         </select>
                                     </label>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={openCreateAdminModal}
-                                    style={{
-                                        padding: "0.3rem 0.7rem",
-                                        borderRadius: "999px",
-                                        border: "1px solid #d1d5db",
-                                        backgroundColor: "#ffffff",
-                                        fontSize: "0.8rem",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Legg til
-                                </button>
                             </div>
 
                             {admins.length === 0 ? (
-                                <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+                                <p style={{fontSize: "0.85rem", color: "#6b7280"}}>
                                     Ingen administratorer funnet.
                                 </p>
                             ) : (
-                                <table
-                                    style={{
-                                        width: "100%",
-                                        borderCollapse: "collapse",
-                                        fontSize: "0.85rem",
-                                    }}
-                                >
+                                <table className="admin-table">
                                     <thead>
                                     <tr>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                borderBottom: "1px solid #e5e7eb",
-                                                padding: "0.25rem",
-                                                cursor: "pointer",
-                                            }}
-                                            onClick={() => toggleAdminSort("name")}
-                                        >
-                                            Navn{" "}
-                                            {adminSortKey === "name" &&
-                                                (adminSortDir === "asc" ? "▲" : "▼")}
-                                        </th>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                borderBottom: "1px solid #e5e7eb",
-                                                padding: "0.25rem",
-                                                cursor: "pointer",
-                                            }}
-                                            onClick={() => toggleAdminSort("email")}
-                                        >
-                                            E-post{" "}
-                                            {adminSortKey === "email" &&
-                                                (adminSortDir === "asc" ? "▲" : "▼")}
-                                        </th>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                borderBottom: "1px solid #e5e7eb",
-                                                padding: "0.25rem",
-                                                cursor: "pointer",
-                                            }}
-                                            onClick={() => toggleAdminSort("phone")}
-                                        >
-                                            Mobil{" "}
-                                            {adminSortKey === "phone" &&
-                                                (adminSortDir === "asc" ? "▲" : "▼")}
-                                        </th>
+                                        <th>Navn</th>
+                                        <th>E-post</th>
+                                        <th>Mobil</th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -1613,30 +1361,15 @@ const UsersAdmin: React.FC = () => {
                                         <tr
                                             key={u.docId}
                                             onClick={() => openEditAdminModal(u)}
-                                            style={{ cursor: "pointer" }}
+                                            className="admin-table__row--clickable"
                                         >
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
+                                            <td>
                                                 {u.displayName}
                                             </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
+                                            <td>
                                                 {u.email}
                                             </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.25rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
+                                            <td>
                                                 {u.phone ?? "—"}
                                             </td>
                                         </tr>
@@ -1672,21 +1405,9 @@ const UsersAdmin: React.FC = () => {
                             boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
                         }}
                     >
-                        <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                        <h3 style={{marginTop: 0, marginBottom: "0.5rem"}}>
                             {teacherModalMode === "create" ? "Ny lærer" : "Rediger lærer"}
                         </h3>
-                        <p
-                            style={{
-                                marginTop: 0,
-                                marginBottom: "0.9rem",
-                                fontSize: "0.8rem",
-                                color: "#6b7280",
-                            }}
-                        >
-                            {teacherModalMode === "create"
-                                ? "Opprett ny lærer, velg hvilke terminer de kan registrere for og lagre."
-                                : "Endre navn, e-post, mobil, rolle og hvilke terminer læreren kan undervise på."}
-                        </p>
 
                         <div
                             style={{
@@ -1696,7 +1417,7 @@ const UsersAdmin: React.FC = () => {
                                 marginBottom: "0.75rem",
                             }}
                         >
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 Navn
                                 <input
                                     type="text"
@@ -1713,7 +1434,7 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 E-post
                                 <input
                                     type="email"
@@ -1730,7 +1451,7 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 Mobil
                                 <input
                                     type="tel"
@@ -1748,7 +1469,7 @@ const UsersAdmin: React.FC = () => {
                             </label>
 
                             {teacherModalMode === "edit" && (
-                                <label style={{ fontSize: "0.8rem" }}>
+                                <label style={{fontSize: "0.8rem"}}>
                                     Rolle
                                     <select
                                         value={editTeacherRole}
@@ -1773,8 +1494,8 @@ const UsersAdmin: React.FC = () => {
                                 </label>
                             )}
 
-                            <div style={{ fontSize: "0.8rem" }}>
-                                <div style={{ marginBottom: "0.25rem" }}>
+                            <div style={{fontSize: "0.8rem"}}>
+                                <div style={{marginBottom: "0.25rem"}}>
                                     Termin(er) læreren kan registrere for:
                                 </div>
                                 <div
@@ -1822,19 +1543,12 @@ const UsersAdmin: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={closeTeacherModal}
-                                style={{
-                                    padding: "0.3rem 0.7rem",
-                                    borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    backgroundColor: "#ffffff",
-                                    fontSize: "0.85rem",
-                                    cursor: "pointer",
-                                }}
+                                className="button button-white thin-border button-small round-corners-whole25"
                             >
                                 Avbryt
                             </button>
                             <button
-                                className={"button button-green"}
+                                className={"button button-black thin-border button-small round-corners-whole25"}
                                 type="button"
                                 onClick={
                                     teacherModalMode === "create"
@@ -1872,21 +1586,9 @@ const UsersAdmin: React.FC = () => {
                             boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
                         }}
                     >
-                        <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                        <h3 style={{marginTop: 0, marginBottom: "0.5rem"}}>
                             {studentModalMode === "create" ? "Ny student" : "Rediger student"}
                         </h3>
-                        <p
-                            style={{
-                                marginTop: 0,
-                                marginBottom: "0.9rem",
-                                fontSize: "0.8rem",
-                                color: "#6b7280",
-                            }}
-                        >
-                            {studentModalMode === "create"
-                                ? "Opprett ny student og velg termin."
-                                : "Endre navn, e-post, mobil, rolle og termin."}
-                        </p>
 
                         <div
                             style={{
@@ -1896,7 +1598,7 @@ const UsersAdmin: React.FC = () => {
                                 marginBottom: "0.75rem",
                             }}
                         >
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 Navn
                                 <input
                                     type="text"
@@ -1913,7 +1615,7 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 E-post
                                 <input
                                     type="email"
@@ -1930,7 +1632,7 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 Mobil
                                 <input
                                     type="tel"
@@ -1948,7 +1650,7 @@ const UsersAdmin: React.FC = () => {
                             </label>
 
                             {studentModalMode === "edit" && (
-                                <label style={{ fontSize: "0.8rem" }}>
+                                <label style={{fontSize: "0.8rem"}}>
                                     Rolle
                                     <select
                                         value={editStudentRole}
@@ -1973,7 +1675,7 @@ const UsersAdmin: React.FC = () => {
                                 </label>
                             )}
 
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 Termin
                                 <select
                                     value={editStudentTerm ?? ""}
@@ -1998,8 +1700,8 @@ const UsersAdmin: React.FC = () => {
                                     ))}
                                 </select>
                             </label>
-                        
-                            
+
+
                         </div>
 
                         <div
@@ -2013,14 +1715,7 @@ const UsersAdmin: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={closeStudentModal}
-                                style={{
-                                    padding: "0.3rem 0.7rem",
-                                    borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    backgroundColor: "#ffffff",
-                                    fontSize: "0.85rem",
-                                    cursor: "pointer",
-                                }}
+                                className="button button-white thin-border button-small round-corners-whole25"
                             >
                                 Avbryt
                             </button>
@@ -2031,15 +1726,7 @@ const UsersAdmin: React.FC = () => {
                                         ? handleSaveCreateStudent
                                         : handleSaveEditStudent
                                 }
-                                style={{
-                                    padding: "0.3rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    backgroundColor: "#16a34a",
-                                    color: "#ffffff",
-                                    fontSize: "0.85rem",
-                                    cursor: "pointer",
-                                }}
+                                className="button button-black thin-border button-small round-corners-whole25"
                             >
                                 {studentModalMode === "create" ? "Opprett student" : "Lagre"}
                             </button>
@@ -2071,21 +1758,9 @@ const UsersAdmin: React.FC = () => {
                             boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
                         }}
                     >
-                        <h3 style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                        <h3 style={{marginTop: 0, marginBottom: "0.5rem"}}>
                             {adminModalMode === "create" ? "Ny admin" : "Rediger admin"}
                         </h3>
-                        <p
-                            style={{
-                                marginTop: 0,
-                                marginBottom: "0.9rem",
-                                fontSize: "0.8rem",
-                                color: "#6b7280",
-                            }}
-                        >
-                            {adminModalMode === "create"
-                                ? "Opprett ny admin."
-                                : "Endre navn, e-post, mobil og rolle."}
-                        </p>
 
                         <div
                             style={{
@@ -2095,7 +1770,7 @@ const UsersAdmin: React.FC = () => {
                                 marginBottom: "0.75rem",
                             }}
                         >
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 Navn
                                 <input
                                     type="text"
@@ -2112,7 +1787,7 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 E-post
                                 <input
                                     type="email"
@@ -2129,7 +1804,7 @@ const UsersAdmin: React.FC = () => {
                                 />
                             </label>
 
-                            <label style={{ fontSize: "0.8rem" }}>
+                            <label style={{fontSize: "0.8rem"}}>
                                 Mobil
                                 <input
                                     type="tel"
@@ -2147,7 +1822,7 @@ const UsersAdmin: React.FC = () => {
                             </label>
 
                             {adminModalMode === "edit" && (
-                                <label style={{ fontSize: "0.8rem" }}>
+                                <label style={{fontSize: "0.8rem"}}>
                                     Rolle
                                     <select
                                         value={editAdminRole}
@@ -2173,8 +1848,8 @@ const UsersAdmin: React.FC = () => {
                             )}
 
                             {/* Termin(er) administratoren skal ha tilgang til */}
-                            <div style={{ fontSize: "0.8rem" }}>
-                                <div style={{ marginBottom: "0.25rem" }}>
+                            <div style={{fontSize: "0.8rem"}}>
+                                <div style={{marginBottom: "0.25rem"}}>
                                     Termin(er) admin kan administrere:
                                 </div>
                                 <div
@@ -2187,7 +1862,7 @@ const UsersAdmin: React.FC = () => {
                                     }}
                                 >
                                     {allowedTermOptions.length === 0 ? (
-                                        <div style={{ color: "#6b7280" }}>Ingen terminer tilgjengelig</div>
+                                        <div style={{color: "#6b7280"}}>Ingen terminer tilgjengelig</div>
                                     ) : (
                                         allowedTermOptions.map((opt) => (
                                             <label
@@ -2224,14 +1899,7 @@ const UsersAdmin: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={closeAdminModal}
-                                style={{
-                                    padding: "0.3rem 0.7rem",
-                                    borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    backgroundColor: "#ffffff",
-                                    fontSize: "0.85rem",
-                                    cursor: "pointer",
-                                }}
+                                className="button button-white thin-border button-small round-corners-whole25"
                             >
                                 Avbryt
                             </button>
@@ -2242,15 +1910,7 @@ const UsersAdmin: React.FC = () => {
                                         ? handleSaveCreateAdmin
                                         : handleSaveEditAdmin
                                 }
-                                style={{
-                                    padding: "0.3rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    backgroundColor: "#16a34a",
-                                    color: "#ffffff",
-                                    fontSize: "0.85rem",
-                                    cursor: "pointer",
-                                }}
+                                className="button button-black thin-border button-small round-corners-whole25"
                             >
                                 {adminModalMode === "create" ? "Opprett admin" : "Lagre"}
                             </button>
@@ -2274,7 +1934,7 @@ const TermsAdmin: React.FC = () => {
     const [orderDirty, setOrderDirty] = useState(false);
 
     // Superadmin kan administrere terminer (legg til / lagre rekkefølge). Andre kan kun se.
-    const { user: authUser } = useAuth();
+    const {user: authUser} = useAuth();
     const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
     useEffect(() => {
         const loadMine = async () => {
@@ -2336,7 +1996,7 @@ const TermsAdmin: React.FC = () => {
                 order: newOrder,
                 createdAt: serverTimestamp(),
             });
-            const row: TermDoc = { docId: ref.id, value: newValue, label: "", order: newOrder };
+            const row: TermDoc = {docId: ref.id, value: newValue, label: "", order: newOrder};
             setTerms((prev) => [...prev, row]);
             setEditingId(ref.id);
             setEditingLabel("");
@@ -2355,8 +2015,8 @@ const TermsAdmin: React.FC = () => {
             return;
         }
         try {
-            await updateDoc(doc(db, "terms", row.docId), { label: newLabel, updatedAt: serverTimestamp() } as any);
-            setTerms((prev) => prev.map((t) => (t.docId === row.docId ? { ...t, label: newLabel } : t)));
+            await updateDoc(doc(db, "terms", row.docId), {label: newLabel, updatedAt: serverTimestamp()} as any);
+            setTerms((prev) => prev.map((t) => (t.docId === row.docId ? {...t, label: newLabel} : t)));
             setEditingId(null);
         } catch (e) {
             console.error("Kunne ikke lagre navn:", e);
@@ -2398,7 +2058,7 @@ const TermsAdmin: React.FC = () => {
         try {
             const batch = writeBatch(db);
             terms.forEach((t, idx) => {
-                batch.update(doc(db, "terms", t.docId), { order: idx + 1 } as any);
+                batch.update(doc(db, "terms", t.docId), {order: idx + 1} as any);
             });
             await batch.commit();
             setOrderDirty(false);
@@ -2410,7 +2070,7 @@ const TermsAdmin: React.FC = () => {
 
     return (
         <section>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.75rem" }}>
+            <div style={{display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.75rem"}}>
                 <button
                     type="button"
                     onClick={handleAdd}
@@ -2448,11 +2108,18 @@ const TermsAdmin: React.FC = () => {
             </div>
 
             {loading ? (
-                <LoadingSpinner />)
+                    <LoadingSpinner/>)
                 : terms.length === 0 ? (
-                    <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>Ingen terminer opprettet ennå.</p>
+                    <p style={{fontSize: "0.9rem", color: "#6b7280"}}>Ingen terminer opprettet ennå.</p>
                 ) : (
-                    <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                    <ul style={{
+                        listStyle: "none",
+                        padding: 0,
+                        margin: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.5rem"
+                    }}>
                         {terms.map((t, idx) => {
                             const isEditing = editingId === t.docId;
                             return (
@@ -2475,41 +2142,83 @@ const TermsAdmin: React.FC = () => {
                                         background: "#ffffff",
                                     }}
                                 >
-                                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flex: 1, minWidth: 0 }}>
-                                        <span style={{ width: 28, textAlign: "center", color: "#6b7280" }}>☰</span>
-                                        <span style={{ width: 36, color: "#6b7280" }}>{idx + 1}</span>
-                                        <span style={{ width: 48, color: "#374151", fontWeight: 600 }}>#{t.value}</span>
+                                    <div style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "0.6rem",
+                                        flex: 1,
+                                        minWidth: 0
+                                    }}>
+                                        <span style={{width: 28, textAlign: "center", color: "#6b7280"}}>☰</span>
+                                        <span style={{width: 36, color: "#6b7280"}}>{idx + 1}</span>
+                                        <span style={{width: 48, color: "#374151", fontWeight: 600}}>#{t.value}</span>
                                         {isEditing ? (
                                             <input
                                                 value={editingLabel}
                                                 onChange={(e) => setEditingLabel(e.target.value)}
                                                 onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') { e.preventDefault(); void handleSaveLabel(t); }
-                                                    if (e.key === 'Escape') { setEditingId(null); }
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        void handleSaveLabel(t);
+                                                    }
+                                                    if (e.key === 'Escape') {
+                                                        setEditingId(null);
+                                                    }
                                                 }}
                                                 placeholder="Navn på modul"
-                                                style={{ flex: 1, minWidth: 0, padding: "0.35rem 0.5rem", border: "1px solid #d1d5db", borderRadius: "0.5rem" }}
+                                                style={{
+                                                    flex: 1,
+                                                    minWidth: 0,
+                                                    padding: "0.35rem 0.5rem",
+                                                    border: "1px solid #d1d5db",
+                                                    borderRadius: "0.5rem"
+                                                }}
                                             />
                                         ) : (
-                                            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                {t.label || <span style={{ color: "#9ca3af" }}>(uten navn)</span>}
+                                            <span style={{
+                                                flex: 1,
+                                                minWidth: 0,
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap"
+                                            }}>
+                                                {t.label || <span style={{color: "#9ca3af"}}>(uten navn)</span>}
                                             </span>
                                         )}
                                     </div>
-                                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                                    <div style={{display: "flex", gap: "0.4rem"}}>
                                         {isEditing ? (
                                             <button
                                                 type="button"
                                                 onClick={() => void handleSaveLabel(t)}
-                                                style={{ padding: "0.25rem 0.6rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "#fff", fontSize: "0.8rem", cursor: "pointer" }}
+                                                style={{
+                                                    padding: "0.25rem 0.6rem",
+                                                    borderRadius: "999px",
+                                                    border: "none",
+                                                    background: "#16a34a",
+                                                    color: "#fff",
+                                                    fontSize: "0.8rem",
+                                                    cursor: "pointer"
+                                                }}
                                             >
                                                 Lagre
                                             </button>
                                         ) : (
                                             <button
                                                 type="button"
-                                                onClick={() => { setEditingId(t.docId); setEditingLabel(t.label); }}
-                                                style={{ padding: "0.25rem 0.6rem", borderRadius: "999px", border: "none", background: "#e5e7eb", color: "#111827", fontSize: "0.8rem", cursor: "pointer" }}
+                                                onClick={() => {
+                                                    setEditingId(t.docId);
+                                                    setEditingLabel(t.label);
+                                                }}
+                                                style={{
+                                                    padding: "0.25rem 0.6rem",
+                                                    borderRadius: "999px",
+                                                    border: "none",
+                                                    background: "#e5e7eb",
+                                                    color: "#111827",
+                                                    fontSize: "0.8rem",
+                                                    cursor: "pointer"
+                                                }}
                                             >
                                                 Endre
                                             </button>
@@ -2517,7 +2226,15 @@ const TermsAdmin: React.FC = () => {
                                         <button
                                             type="button"
                                             onClick={() => void handleDelete(t)}
-                                            style={{ padding: "0.25rem 0.6rem", borderRadius: "999px", border: "none", background: "#fee2e2", color: "#b91c1c", fontSize: "0.8rem", cursor: "pointer" }}
+                                            style={{
+                                                padding: "0.25rem 0.6rem",
+                                                borderRadius: "999px",
+                                                border: "none",
+                                                background: "#fee2e2",
+                                                color: "#b91c1c",
+                                                fontSize: "0.8rem",
+                                                cursor: "pointer"
+                                            }}
                                         >
                                             Slett
                                         </button>
@@ -2569,7 +2286,7 @@ const TermSetup: React.FC = () => {
     const [groupSortList, setGroupSortList] = useState<Requirement[]>([]);
 
     // Begrens redigering til terminer den innloggede adminen kan administrere
-    const { user: authUser } = useAuth();
+    const {user: authUser} = useAuth();
     const [myAllowedTerms, setMyAllowedTerms] = useState<number[] | null>(null);
     const [isSuperAdmin, setIsSuperAdmin] = useState<boolean | null>(null);
     useEffect(() => {
@@ -2662,7 +2379,7 @@ const TermSetup: React.FC = () => {
                             const label = typeof data?.label === "string" ? data.label : "";
                             const order = typeof data?.order === "number" ? data.order : undefined;
                             if (typeof value !== "number") return null;
-                            return { docId: d.id, value, label, order } as TermDoc;
+                            return {docId: d.id, value, label, order} as TermDoc;
                         })
                         .filter(Boolean) as TermDoc[];
                     list.sort((a, b) => {
@@ -2701,7 +2418,7 @@ const TermSetup: React.FC = () => {
             const ao = a.order ?? Number.MAX_SAFE_INTEGER;
             const bo = b.order ?? Number.MAX_SAFE_INTEGER;
             if (ao !== bo) return ao - bo;
-            return a.category.localeCompare(b.category, "nb-NO", { sensitivity: "base" });
+            return a.category.localeCompare(b.category, "nb-NO", {sensitivity: "base"});
         });
 
     const termOptionsWithOverrides = useMemo(() => {
@@ -2709,7 +2426,7 @@ const TermSetup: React.FC = () => {
         const base: { value: number; label: string }[] = terms
             .slice()
             .sort((a, b) => (a.order ?? a.value) - (b.order ?? b.value))
-            .map((t) => ({ value: t.value, label: t.label || `Termin ${t.value}` }));
+            .map((t) => ({value: t.value, label: t.label || `Termin ${t.value}`}));
         if (Object.keys(termLabelOverrides).length > 0) {
             return base.map((opt) => ({
                 ...opt,
@@ -2757,7 +2474,7 @@ const TermSetup: React.FC = () => {
                     updatedAt: serverTimestamp(),
                 } as any);
                 setTerms((prev) =>
-                    prev.map((t) => (t.docId === existing.docId ? { ...t, label: newLabel } : t))
+                    prev.map((t) => (t.docId === existing.docId ? {...t, label: newLabel} : t))
                 );
             } else {
                 const id = String(selectedTerm);
@@ -2768,9 +2485,9 @@ const TermSetup: React.FC = () => {
                         updatedAt: serverTimestamp(),
                         value: Number(selectedTerm),
                     },
-                    { merge: true }
+                    {merge: true}
                 );
-                setTermLabelOverrides((prev) => ({ ...prev, [Number(selectedTerm)]: newLabel }));
+                setTermLabelOverrides((prev) => ({...prev, [Number(selectedTerm)]: newLabel}));
             }
             setIsEditingTermLabel(false);
         } catch (e) {
@@ -2794,7 +2511,7 @@ const TermSetup: React.FC = () => {
                 order: newOrder,
                 createdAt: serverTimestamp(),
             });
-            const newTerm: TermDoc = { docId: ref.id, value: newValue, label: "", order: newOrder };
+            const newTerm: TermDoc = {docId: ref.id, value: newValue, label: "", order: newOrder};
             setTerms((prev) => [...prev, newTerm]);
             setSelectedTerm(newValue);
             setTermLabelInput("");
@@ -2832,11 +2549,11 @@ const TermSetup: React.FC = () => {
         try {
             const batch = writeBatch(db);
             termSortList.forEach((t, idx) => {
-                batch.update(doc(db, "terms", t.docId), { order: idx + 1 } as any);
+                batch.update(doc(db, "terms", t.docId), {order: idx + 1} as any);
             });
             await batch.commit();
             // Reflect locally
-            setTerms(termSortList.map((t, idx) => ({ ...t, order: idx + 1 })));
+            setTerms(termSortList.map((t, idx) => ({...t, order: idx + 1})));
             setShowTermSort(false);
         } catch (e) {
             console.error("Kunne ikke lagre sortering av terminer:", e);
@@ -2853,7 +2570,7 @@ const TermSetup: React.FC = () => {
                 const ao = a.order ?? Number.MAX_SAFE_INTEGER;
                 const bo = b.order ?? Number.MAX_SAFE_INTEGER;
                 if (ao !== bo) return ao - bo;
-                return a.category.localeCompare(b.category, "nb-NO", { sensitivity: "base" });
+                return a.category.localeCompare(b.category, "nb-NO", {sensitivity: "base"});
             });
         setGroupSortList(list);
         setShowGroupSort(true);
@@ -2874,7 +2591,7 @@ const TermSetup: React.FC = () => {
         try {
             const batch = writeBatch(db);
             groupSortList.forEach((r, idx) => {
-                batch.update(doc(db, "requirements", r.id), { order: idx + 1 } as any);
+                batch.update(doc(db, "requirements", r.id), {order: idx + 1} as any);
             });
             await batch.commit();
             // Reflect locally for selected term only
@@ -2882,7 +2599,7 @@ const TermSetup: React.FC = () => {
                 const map: Record<string, number> = {};
                 groupSortList.forEach((r, idx) => (map[r.id] = idx + 1));
                 return prev.map((r) =>
-                    map[r.id] ? { ...r, order: map[r.id] } : r
+                    map[r.id] ? {...r, order: map[r.id]} : r
                 );
             });
             setShowGroupSort(false);
@@ -2899,7 +2616,7 @@ const TermSetup: React.FC = () => {
         termLabel: string;
         reqCount: number;
         timeCount: number;
-    }>({ open: false, termValue: null, termLabel: "", reqCount: 0, timeCount: 0 });
+    }>({open: false, termValue: null, termLabel: "", reqCount: 0, timeCount: 0});
 
     // Åpne bekreftelsesmodal for sletting av valgt termin
     const openDeleteTermModal = () => {
@@ -2908,11 +2625,11 @@ const TermSetup: React.FC = () => {
         const termLabel = labelForTerm(termValue);
         const reqCount = requirements.filter((r) => r.term === termValue).length;
         const timeCount = times.filter((t) => t.term === termValue).length;
-        setDeleteTermModal({ open: true, termValue, termLabel, reqCount, timeCount });
+        setDeleteTermModal({open: true, termValue, termLabel, reqCount, timeCount});
     };
 
     const cancelDeleteTermModal = () => {
-        setDeleteTermModal({ open: false, termValue: null, termLabel: "", reqCount: 0, timeCount: 0 });
+        setDeleteTermModal({open: false, termValue: null, termLabel: "", reqCount: 0, timeCount: 0});
     };
 
     // Kjerneoperasjonen for å slette termin + alle krav/timer
@@ -2989,9 +2706,9 @@ const TermSetup: React.FC = () => {
         }
 
         try {
-            await updateDoc(doc(db, "times", time.id), { name: newName });
+            await updateDoc(doc(db, "times", time.id), {name: newName});
             setTimes((prev) =>
-                prev.map((t) => (t.id === time.id ? { ...t, name: newName } : t))
+                prev.map((t) => (t.id === time.id ? {...t, name: newName} : t))
             );
             setEditingTimeId(null);
             setEditingTimeName("");
@@ -3059,7 +2776,7 @@ const TermSetup: React.FC = () => {
             );
             const timesSnap = await getDocs(timesQ);
             timesSnap.forEach((d) => {
-                batch.update(d.ref, { category: newName });
+                batch.update(d.ref, {category: newName});
             });
 
             // Oppdater alle sessions i denne gruppen/termin
@@ -3070,7 +2787,7 @@ const TermSetup: React.FC = () => {
             );
             const sessionsSnap = await getDocs(sessionsQ);
             sessionsSnap.forEach((d) => {
-                batch.update(d.ref, { category: newName });
+                batch.update(d.ref, {category: newName});
             });
 
             await batch.commit();
@@ -3079,7 +2796,7 @@ const TermSetup: React.FC = () => {
             setRequirements((prev) =>
                 prev.map((r) =>
                     r.id === req.id
-                        ? { ...r, category: newName, requiredCount: newRequired }
+                        ? {...r, category: newName, requiredCount: newRequired}
                         : r
                 )
             );
@@ -3087,7 +2804,7 @@ const TermSetup: React.FC = () => {
             setTimes((prev) =>
                 prev.map((t) =>
                     t.term === req.term && t.category === oldCategory
-                        ? { ...t, category: newName }
+                        ? {...t, category: newName}
                         : t
                 )
             );
@@ -3116,10 +2833,10 @@ const TermSetup: React.FC = () => {
             const currentForTerm = requirements.filter((r) => r.term === selectedTerm);
             const maxOrder = currentForTerm.length
                 ? Math.max(
-                      ...currentForTerm.map((r) =>
-                          typeof r.order === "number" ? r.order : 0
-                      )
-                  )
+                    ...currentForTerm.map((r) =>
+                        typeof r.order === "number" ? r.order : 0
+                    )
+                )
                 : 0;
             const newOrder = maxOrder + 1;
             const ref = await addDoc(collection(db, "requirements"), {
@@ -3152,7 +2869,7 @@ const TermSetup: React.FC = () => {
             });
             setRequirements((prev) =>
                 prev.map((r) =>
-                    r.id === req.id ? { ...r, requiredCount: value } : r
+                    r.id === req.id ? {...r, requiredCount: value} : r
                 )
             );
         } catch (err) {
@@ -3166,11 +2883,11 @@ const TermSetup: React.FC = () => {
         open: boolean;
         req: { id: string; term: number; category: string } | null;
         timeCount: number;
-    }>({ open: false, req: null, timeCount: 0 });
+    }>({open: false, req: null, timeCount: 0});
 
     // Felles slettefunksjon slik at vi kan hoppe over advarsel når det ikke finnes timer
     const performDeleteGroup = async (req: { id: string; term: number; category: string }, timeCountHint?: number) => {
-        const { id, term, category } = req;
+        const {id, term, category} = req;
         try {
             // Finn alle times i denne gruppen for valgt termin
             const timesQ = query(
@@ -3210,11 +2927,11 @@ const TermSetup: React.FC = () => {
             void performDeleteGroup(req, 0);
             return;
         }
-        setDeleteGroupModal({ open: true, req, timeCount: count });
+        setDeleteGroupModal({open: true, req, timeCount: count});
     };
 
     const cancelDeleteGroupModal = () => {
-        setDeleteGroupModal({ open: false, req: null, timeCount: 0 });
+        setDeleteGroupModal({open: false, req: null, timeCount: 0});
     };
 
     const confirmDeleteGroupModal = async () => {
@@ -3242,7 +2959,7 @@ const TermSetup: React.FC = () => {
                     name,
                 },
             ]);
-            setNewTimeNameByReq((prev) => ({ ...prev, [key]: "" }));
+            setNewTimeNameByReq((prev) => ({...prev, [key]: ""}));
         } catch (err) {
             console.error("Feil ved oppretting av time:", err);
             alert("Kunne ikke opprette time.");
@@ -3253,14 +2970,14 @@ const TermSetup: React.FC = () => {
     const [deleteTimeModal, setDeleteTimeModal] = useState<{
         open: boolean;
         time: TimeDef | null;
-    }>({ open: false, time: null });
+    }>({open: false, time: null});
 
     const openDeleteTimeModal = (time: TimeDef) => {
-        setDeleteTimeModal({ open: true, time });
+        setDeleteTimeModal({open: true, time});
     };
 
     const cancelDeleteTimeModal = () => {
-        setDeleteTimeModal({ open: false, time: null });
+        setDeleteTimeModal({open: false, time: null});
     };
 
     const confirmDeleteTimeModal = async () => {
@@ -3279,872 +2996,884 @@ const TermSetup: React.FC = () => {
     };
 
     if (loading) {
-        return <LoadingSpinner />;
+        return <LoadingSpinner/>;
     }
 
     return (
         <>
-        <section style={{ marginBottom: "2rem" }}>
-            {/* Toppkontroller: Termin (øverst), deretter Ny gruppe + Legg til gruppe under (desktop og mobil) */}
-            <div
-                style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.5rem",
-                    marginBottom: "0.75rem",
-                }}
-            >
-                <div className="admin-books-controls" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                    <div
-                        className={`admin-books-rest${isSuperAdmin ? " admin-books-rest--split" : ""}`}
-                        style={{ display: "flex", gap: "0.5rem", flex: 1, minWidth: 0 }}
-                    >
-                        {isEditingTermLabel && isSuperAdmin ? (
-                            <input
-                                className="admin-books-select"
-                                ref={termLabelInputRef}
-                                type="text"
-                                value={termLabelInput}
-                                onChange={(e) => setTermLabelInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        void saveInlineRename();
-                                    } else if (e.key === "Escape") {
-                                        e.preventDefault();
-                                        cancelInlineRename();
-                                    }
-                                }}
-                                placeholder="Navn på modul"
-                                style={{
-                                    flex: 1,
-                                    minWidth: 0,
-                                    padding: "0.35rem 0.5rem",
-                                    borderRadius: "0.5rem",
-                                    border: "1px solid #d1d5db",
-                                }}
-                            />
-                        ) : (
-                            <select
-                                className="admin-books-select"
-                                value={selectedTerm}
-                                onChange={(e) => {
-                                    const v = e.target.value;
-                                    if (v === "__new__") {
-                                        if (hasGate) {
-                                            // Begrenset admin kan ikke opprette nye oppmøtebøker
-                                            return;
-                                        }
-                                        void createNewTerm();
-                                        return;
-                                    }
-                                    setSelectedTerm(v === "" ? "" : parseInt(v, 10));
-                                }}
-                                style={{
-                                    flex: 1,
-                                    minWidth: 0,
-                                    padding: "0.35rem 0.5rem",
-                                    borderRadius: "0.5rem",
-                                    border: "1px solid #d1d5db",
-                                    // Full width when no admin actions are shown (non-superadmin)
-                                    width: isSuperAdmin ? undefined : "100%",
-                                }}
-                            >
-                                <option value="" disabled>
-                                    Velg termin
-                                </option>
-                                {(!hasGate
-                                    ? termOptionsWithOverrides
-                                    : termOptionsWithOverrides.filter((opt) => allowedSet?.has(opt.value)))
-                                    .map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </option>
-                                    ))}
-                                {!hasGate && <option value="__new__">+ Ny oppmøtebok</option>}
-                            </select>
-                        )}
-                        {isSuperAdmin && (
-                            <button
-                                className={"button-green admin-books-action"}
-                                type="button"
-                                disabled={selectedTerm === "" && !isEditingTermLabel}
-                                onClick={() => {
-                                    if (isEditingTermLabel) {
-                                        void saveInlineRename();
-                                    } else {
-                                        startInlineRename();
-                                    }
-                                }}
-                                style={{
-                                    width: "160px",
-                                    padding: "0.45rem 0.9rem",
-                                    cursor:
-                                        selectedTerm === "" && !isEditingTermLabel
-                                            ? "not-allowed"
-                                            : "pointer",
-                                    whiteSpace: "nowrap",
-                                }}
-                            >
-                                {isEditingTermLabel ? "Legg til" : "Endre navn"}
-                            </button>
-                        )}
-                    </div>
-                    {/* Sort/filter button takes its space; rest splits 40/60 on small screens */}
-                    {isSuperAdmin && (
-                        <button
-                            className="admin-books-filter"
-                            type="button"
-                            title="Sorter oppmøtebøker"
-                            disabled={terms.length === 0}
-                            onClick={openTermSort}
-                            style={{
-                                padding: "0.35rem 0.5rem",
-                                borderRadius: "0.5rem",
-                                border: "1px solid #d1d5db",
-                                background: "#ffffff",
-                                fontSize: "0.9rem",
-                                cursor: terms.length === 0 ? "not-allowed" : "pointer",
-                            }}
+            <section style={{marginBottom: "2rem"}}>
+                {/* Toppkontroller: Termin (øverst), deretter Ny gruppe + Legg til gruppe under (desktop og mobil) */}
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.5rem",
+                        marginBottom: "0.75rem",
+                    }}
+                >
+                    <div className="admin-books-controls"
+                         style={{display: "flex", gap: "0.5rem", alignItems: "center"}}>
+                        <div
+                            className={`admin-books-rest${isSuperAdmin ? " admin-books-rest--split" : ""}`}
+                            style={{display: "flex", gap: "0.5rem", flex: 1, minWidth: 0}}
                         >
-                            ⇅
-                        </button>
-                    )}
-                </div>
-
-                <div className="admin-books-controls" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                    {(() => {
-                        const termVal = selectedTerm === "" ? null : Number(selectedTerm);
-                        const t = termVal != null ? terms.find((x) => x.value === termVal) : undefined;
-                        const hasName = !!t?.label && t.label.trim().length > 0;
-                        const override = termVal != null ? termLabelOverrides[termVal] : undefined;
-                        const hasOverride = !!override && override.trim().length > 0;
-                        // Redigeringskrav: kontroller er kun aktive når en termin er valgt OG har lagret navn
-                        const canEditGroups = termVal != null && (hasName || hasOverride);
-                        return (
-                            <>
-                                <div className={`admin-books-rest admin-books-rest--split`} style={{ display: "flex", gap: "0.5rem", flex: 1, minWidth: 0 }}>
-                                    <input
-                                        className="admin-books-select"
-                                        type="text"
-                                        placeholder="Ny gruppe..."
-                                        value={newCategoryName}
-                                        onChange={(e) => setNewCategoryName(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter" && canEditGroups) {
-                                                e.preventDefault();
-                                                void handleAddCategory();
-                                            }
-                                        }}
-                                        disabled={!canEditGroups}
-                                        style={{
-                                            flex: 1,
-                                            minWidth: 0,
-                                            padding: "0.35rem 0.5rem",
-                                            borderRadius: "0.5rem",
-                                            border: "1px solid #d1d5db",
-                                            opacity: canEditGroups ? 1 : 0.6,
-                                            cursor: canEditGroups ? "text" : "not-allowed",
-                                        }}
-                                    />
-                                    <button
-                                        className={"button-green admin-books-action"}
-                                        type="button"
-                                        onClick={handleAddCategory}
-                                        disabled={!canEditGroups}
-                                        style={{
-                                            width: "160px",
-                                            padding: "0.45rem 0.9rem",
-                                            cursor: canEditGroups ? "pointer" : "not-allowed",
-                                            whiteSpace: "nowrap",
-                                            opacity: canEditGroups ? 1 : 0.7,
-                                        }}
-                                    >
-                                        Legg til
-                                    </button>
-                                </div>
-                                {/* Sort groups button */}
-                                <button
-                                    className="admin-books-filter"
-                                    type="button"
-                                    title="Sorter grupper"
-                                    disabled={!canEditGroups || requirementsForTerm.length === 0}
-                                    onClick={openGroupSort}
+                            {isEditingTermLabel && isSuperAdmin ? (
+                                <input
+                                    className="admin-books-select"
+                                    ref={termLabelInputRef}
+                                    type="text"
+                                    value={termLabelInput}
+                                    onChange={(e) => setTermLabelInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            void saveInlineRename();
+                                        } else if (e.key === "Escape") {
+                                            e.preventDefault();
+                                            cancelInlineRename();
+                                        }
+                                    }}
+                                    placeholder="Navn på modul"
                                     style={{
+                                        flex: 1,
+                                        minWidth: 0,
                                         padding: "0.35rem 0.5rem",
                                         borderRadius: "0.5rem",
                                         border: "1px solid #d1d5db",
-                                        background: "#ffffff",
-                                        fontSize: "0.9rem",
+                                    }}
+                                />
+                            ) : (
+                                <select
+                                    className="admin-books-select"
+                                    value={selectedTerm}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        if (v === "__new__") {
+                                            if (hasGate) {
+                                                // Begrenset admin kan ikke opprette nye oppmøtebøker
+                                                return;
+                                            }
+                                            void createNewTerm();
+                                            return;
+                                        }
+                                        setSelectedTerm(v === "" ? "" : parseInt(v, 10));
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                        padding: "0.35rem 0.5rem",
+                                        borderRadius: "0.5rem",
+                                        border: "1px solid #d1d5db",
+                                        // Full width when no admin actions are shown (non-superadmin)
+                                        width: isSuperAdmin ? undefined : "100%",
+                                    }}
+                                >
+                                    <option value="" disabled>
+                                        Velg termin
+                                    </option>
+                                    {(!hasGate
+                                        ? termOptionsWithOverrides
+                                        : termOptionsWithOverrides.filter((opt) => allowedSet?.has(opt.value)))
+                                        .map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    {!hasGate && <option value="__new__">+ Ny oppmøtebok</option>}
+                                </select>
+                            )}
+                            {isSuperAdmin && (
+                                <button
+                                    className={"button-green admin-books-action"}
+                                    type="button"
+                                    disabled={selectedTerm === "" && !isEditingTermLabel}
+                                    onClick={() => {
+                                        if (isEditingTermLabel) {
+                                            void saveInlineRename();
+                                        } else {
+                                            startInlineRename();
+                                        }
+                                    }}
+                                    style={{
+                                        width: "160px",
+                                        padding: "0.45rem 0.9rem",
                                         cursor:
-                                            !canEditGroups || requirementsForTerm.length === 0
+                                            selectedTerm === "" && !isEditingTermLabel
                                                 ? "not-allowed"
                                                 : "pointer",
-                                        opacity: !canEditGroups || requirementsForTerm.length === 0 ? 0.7 : 1,
+                                        whiteSpace: "nowrap",
                                     }}
                                 >
-                                    ⇅
+                                    {isEditingTermLabel ? "Legg til" : "Endre navn"}
                                 </button>
-                            </>
-                        );
-                    })()}
-                </div>
-            </div>
-
-            {(() => {
-                const termVal = selectedTerm === "" ? null : Number(selectedTerm);
-                const t = termVal != null ? terms.find((x) => x.value === termVal) : undefined;
-                const hasName = !!t?.label && t.label.trim().length > 0;
-                const override = termVal != null ? termLabelOverrides[termVal] : undefined;
-                const hasOverride = !!override && override.trim().length > 0;
-                const canEditGroups = termVal != null && (hasName || hasOverride);
-                if (!canEditGroups) return null; // Skjul tom-tekst før termin har navn
-                return requirementsForTerm.length === 0 ? (
-                    <p style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-                        Ingen grupper definert ennå for {labelForTerm(selectedTerm as number)}.
-                    </p>
-                ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                    {requirementsForTerm.map((req) => {
-                        const key = req.id;
-                        const catTimes = timesForTerm
-                            .filter((t) => t.category === req.category)
-                            .sort((a, b) => {
-                                const na = leadingNumberFromName(a.name);
-                                const nb = leadingNumberFromName(b.name);
-                                if (na !== nb) return na - nb;
-                                return a.name.localeCompare(b.name, "nb-NO", {
-                                    sensitivity: "base",
-                                });
-                            });
-                        const newTimeName = newTimeNameByReq[key] ?? "";
-                        const totalInGroup = timesForTerm.filter(
-                            (t) => t.category === req.category
-                        ).length;
-                        const isEditingReq = editingReqId === req.id;
-
-                        return (
-                            <div
-                                key={req.id}
+                            )}
+                        </div>
+                        {/* Sort/filter button takes its space; rest splits 40/60 on small screens */}
+                        {isSuperAdmin && (
+                            <button
+                                className="admin-books-filter"
+                                type="button"
+                                title="Sorter oppmøtebøker"
+                                disabled={terms.length === 0}
+                                onClick={openTermSort}
                                 style={{
-                                    borderRadius: "0.75rem",
-                                    border: "1px solid #e5e7eb",
-                                    padding: "0.75rem 0.75rem",
-                                    backgroundColor: "#f9fafb",
+                                    padding: "0.35rem 0.5rem",
+                                    borderRadius: "0.5rem",
+                                    border: "1px solid #d1d5db",
+                                    background: "#ffffff",
+                                    fontSize: "0.9rem",
+                                    cursor: terms.length === 0 ? "not-allowed" : "pointer",
                                 }}
                             >
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        alignItems: "center",
-                                        marginBottom: "0.5rem",
-                                        gap: "0.5rem",
-                                        flexWrap: "wrap",
-                                    }}
-                                >
-                                    {/* VENSTRESIDE: navn + krav */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "0.5rem",
-                                            flexWrap: "wrap",
-                                        }}
-                                    >
-                                        {isEditingReq ? (
-                                            <>
-                                                {/* Redigerbart gruppenavn */}
-                                                <input
-                                                    type="text"
-                                                    value={editingCategory}
-                                                    onChange={(e) => setEditingCategory(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === "Enter") {
-                                                            void handleSaveRequirement(req);
-                                                        } else if (e.key === "Escape") {
-                                                            cancelEditRequirement();
-                                                        }
-                                                    }}
-                                                    autoFocus
-                                                    style={{
-                                                        minWidth: "12rem",
-                                                        padding: "0.2rem 0.35rem",
-                                                        borderRadius: "0.4rem",
-                                                        border: "1px solid #d1d5db",
-                                                        fontSize: "0.9rem",
-                                                    }}
-                                                />
+                                ⇅
+                            </button>
+                        )}
+                    </div>
 
-                                                {/* Redigerbart krav (0–totalInGroup) */}
-                                                <div
-                                                    style={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        gap: "0.25rem",
-                                                    }}
-                                                >
-                                                    <input
-                                                        type="number"
-                                                        min={0}
-                                                        max={totalInGroup}
-                                                        value={editingRequiredCount}
-                                                        onChange={(e) => {
-                                                            const val = parseInt(e.target.value, 10);
-                                                            setEditingRequiredCount(
-                                                                Number.isNaN(val) ? 0 : val
-                                                            );
-                                                        }}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === "Enter") {
-                                                                void handleSaveRequirement(req);
-                                                            } else if (e.key === "Escape") {
-                                                                cancelEditRequirement();
-                                                            }
-                                                        }}
-                                                        style={{
-                                                            width: "4rem",
-                                                            padding: "0.2rem 0.35rem",
-                                                            borderRadius: "0.4rem",
-                                                            border: "1px solid #d1d5db",
-                                                            fontSize: "0.9rem",
-                                                            textAlign: "center",
-                                                        }}
-                                                    />
-                                                    <span
-                                                        style={{
-                                                            fontSize: "0.8rem",
-                                                            color: "#6b7280",
-                                                        }}
-                                                    >
-                                / {totalInGroup}
-                            </span>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div
-                                                style={{
-                                                    fontWeight: 600,
-                                                    fontSize: "0.95rem",
-                                                }}
-                                            >
-                                                {req.category} ({req.requiredCount}/{totalInGroup})
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* HØYRESIDE: knapper */}
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "0.5rem",
-                                        }}
-                                    >
-                                        {/* Endre / Lagre gruppe */}
+                    <div className="admin-books-controls"
+                         style={{display: "flex", gap: "0.5rem", alignItems: "center"}}>
+                        {(() => {
+                            const termVal = selectedTerm === "" ? null : Number(selectedTerm);
+                            const t = termVal != null ? terms.find((x) => x.value === termVal) : undefined;
+                            const hasName = !!t?.label && t.label.trim().length > 0;
+                            const override = termVal != null ? termLabelOverrides[termVal] : undefined;
+                            const hasOverride = !!override && override.trim().length > 0;
+                            // Redigeringskrav: kontroller er kun aktive når en termin er valgt OG har lagret navn
+                            const canEditGroups = termVal != null && (hasName || hasOverride);
+                            return (
+                                <>
+                                    <div className={`admin-books-rest admin-books-rest--split`}
+                                         style={{display: "flex", gap: "0.5rem", flex: 1, minWidth: 0}}>
+                                        <input
+                                            className="admin-books-select"
+                                            type="text"
+                                            placeholder="Ny gruppe..."
+                                            value={newCategoryName}
+                                            onChange={(e) => setNewCategoryName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && canEditGroups) {
+                                                    e.preventDefault();
+                                                    void handleAddCategory();
+                                                }
+                                            }}
+                                            disabled={!canEditGroups}
+                                            style={{
+                                                flex: 1,
+                                                minWidth: 0,
+                                                padding: "0.35rem 0.5rem",
+                                                borderRadius: "0.5rem",
+                                                border: "1px solid #d1d5db",
+                                                opacity: canEditGroups ? 1 : 0.6,
+                                                cursor: canEditGroups ? "text" : "not-allowed",
+                                            }}
+                                        />
                                         <button
                                             className={"button-green admin-books-action"}
                                             type="button"
-                                            onClick={() =>
-                                                isEditingReq
-                                                    ? void handleSaveRequirement(req)
-                                                    : startEditRequirement(req)
-                                            }
+                                            onClick={handleAddCategory}
+                                            disabled={!canEditGroups}
                                             style={{
+                                                width: "160px",
                                                 padding: "0.45rem 0.9rem",
-                                                cursor: "pointer",
+                                                cursor: canEditGroups ? "pointer" : "not-allowed",
                                                 whiteSpace: "nowrap",
+                                                opacity: canEditGroups ? 1 : 0.7,
                                             }}
                                         >
-                                            {isEditingReq ? "Lagre" : "Endre navn"}
-                                        </button>
-
-                                        {/* Slett gruppe */}
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                openDeleteGroupModal({ id: req.id, term: req.term, category: req.category })
-                                            }
-                                            style={{
-                                                padding: "0.25rem 0.6rem",
-                                                borderRadius: "999px",
-                                                border: "none",
-                                                backgroundColor: "#fee2e2",
-                                                color: "#991b1b",
-                                                fontSize: "0.75rem",
-                                                cursor: "pointer",
-                                            }}
-                                        >
-                                            Slett gruppe
+                                            Legg til
                                         </button>
                                     </div>
-                                </div>
-
-                                {catTimes.length > 0 ? (
-                                    <ul
+                                    {/* Sort groups button */}
+                                    <button
+                                        className="admin-books-filter"
+                                        type="button"
+                                        title="Sorter grupper"
+                                        disabled={!canEditGroups || requirementsForTerm.length === 0}
+                                        onClick={openGroupSort}
                                         style={{
-                                            listStyle: "none",
-                                            paddingLeft: 0,
-                                            margin: "0 0 0.5rem 0",
-                                            fontSize: "0.85rem",
+                                            padding: "0.35rem 0.5rem",
+                                            borderRadius: "0.5rem",
+                                            border: "1px solid #d1d5db",
+                                            background: "#ffffff",
+                                            fontSize: "0.9rem",
+                                            cursor:
+                                                !canEditGroups || requirementsForTerm.length === 0
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                            opacity: !canEditGroups || requirementsForTerm.length === 0 ? 0.7 : 1,
                                         }}
                                     >
-                                        {catTimes.map((t) => {
-                                            const isEditing = editingTimeId === t.id;
+                                        ⇅
+                                    </button>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </div>
 
-                                            return (
-                                                <li
-                                                    key={t.id}
-                                                    style={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "space-between",
-                                                        padding: "0.15rem 0",
-                                                        borderBottom: "1px dashed #e5e7eb",
-                                                        gap: "0.5rem",
-                                                    }}
-                                                >
-                                                    <div style={{ flex: 1 }}>
-                                                        {isEditing ? (
+                {(() => {
+                    const termVal = selectedTerm === "" ? null : Number(selectedTerm);
+                    const t = termVal != null ? terms.find((x) => x.value === termVal) : undefined;
+                    const hasName = !!t?.label && t.label.trim().length > 0;
+                    const override = termVal != null ? termLabelOverrides[termVal] : undefined;
+                    const hasOverride = !!override && override.trim().length > 0;
+                    const canEditGroups = termVal != null && (hasName || hasOverride);
+                    if (!canEditGroups) return null; // Skjul tom-tekst før termin har navn
+                    return requirementsForTerm.length === 0 ? (
+                        <p style={{fontSize: "0.85rem", color: "#6b7280"}}>
+                            Ingen grupper definert ennå for {labelForTerm(selectedTerm as number)}.
+                        </p>
+                    ) : (
+                        <div style={{display: "flex", flexDirection: "column", gap: "1rem"}}>
+                            {requirementsForTerm.map((req) => {
+                                const key = req.id;
+                                const catTimes = timesForTerm
+                                    .filter((t) => t.category === req.category)
+                                    .sort((a, b) => {
+                                        const na = leadingNumberFromName(a.name);
+                                        const nb = leadingNumberFromName(b.name);
+                                        if (na !== nb) return na - nb;
+                                        return a.name.localeCompare(b.name, "nb-NO", {
+                                            sensitivity: "base",
+                                        });
+                                    });
+                                const newTimeName = newTimeNameByReq[key] ?? "";
+                                const totalInGroup = timesForTerm.filter(
+                                    (t) => t.category === req.category
+                                ).length;
+                                const isEditingReq = editingReqId === req.id;
+
+                                return (
+                                    <div
+                                        key={req.id}
+                                        style={{
+                                            borderRadius: "0.75rem",
+                                            border: "1px solid #e5e7eb",
+                                            padding: "0.75rem 0.75rem",
+                                            backgroundColor: "#f9fafb",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                marginBottom: "0.5rem",
+                                                gap: "0.5rem",
+                                                flexWrap: "wrap",
+                                            }}
+                                        >
+                                            {/* VENSTRESIDE: navn + krav */}
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "0.5rem",
+                                                    flexWrap: "wrap",
+                                                }}
+                                            >
+                                                {isEditingReq ? (
+                                                    <>
+                                                        {/* Redigerbart gruppenavn */}
+                                                        <input
+                                                            type="text"
+                                                            value={editingCategory}
+                                                            onChange={(e) => setEditingCategory(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter") {
+                                                                    void handleSaveRequirement(req);
+                                                                } else if (e.key === "Escape") {
+                                                                    cancelEditRequirement();
+                                                                }
+                                                            }}
+                                                            autoFocus
+                                                            style={{
+                                                                minWidth: "12rem",
+                                                                padding: "0.2rem 0.35rem",
+                                                                borderRadius: "0.4rem",
+                                                                border: "1px solid #d1d5db",
+                                                                fontSize: "0.9rem",
+                                                            }}
+                                                        />
+
+                                                        {/* Redigerbart krav (0–totalInGroup) */}
+                                                        <div
+                                                            style={{
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                gap: "0.25rem",
+                                                            }}
+                                                        >
                                                             <input
-                                                                type="text"
-                                                                value={editingTimeName}
-                                                                onChange={(e) => setEditingTimeName(e.target.value)}
+                                                                type="number"
+                                                                min={0}
+                                                                max={totalInGroup}
+                                                                value={editingRequiredCount}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value, 10);
+                                                                    setEditingRequiredCount(
+                                                                        Number.isNaN(val) ? 0 : val
+                                                                    );
+                                                                }}
                                                                 onKeyDown={(e) => {
                                                                     if (e.key === "Enter") {
-                                                                        void handleRenameTime(t);
+                                                                        void handleSaveRequirement(req);
                                                                     } else if (e.key === "Escape") {
-                                                                        setEditingTimeId(null);
-                                                                        setEditingTimeName("");
+                                                                        cancelEditRequirement();
                                                                     }
                                                                 }}
-                                                                autoFocus
                                                                 style={{
-                                                                    width: "100%",
+                                                                    width: "4rem",
                                                                     padding: "0.2rem 0.35rem",
                                                                     borderRadius: "0.4rem",
                                                                     border: "1px solid #d1d5db",
-                                                                    fontSize: "0.85rem",
+                                                                    fontSize: "0.9rem",
+                                                                    textAlign: "center",
                                                                 }}
                                                             />
-                                                        ) : (
-                                                            <span>{t.name}</span>
-                                                        )}
-                                                    </div>
-
+                                                            <span
+                                                                style={{
+                                                                    fontSize: "0.8rem",
+                                                                    color: "#6b7280",
+                                                                }}
+                                                            >
+                                / {totalInGroup}
+                            </span>
+                                                        </div>
+                                                    </>
+                                                ) : (
                                                     <div
                                                         style={{
-                                                            display: "flex",
-                                                            alignItems: "center",
-                                                            gap: "0.35rem",
+                                                            fontWeight: 600,
+                                                            fontSize: "0.95rem",
                                                         }}
                                                     >
-                                                        {/* Endre / Lagre-knapp */}
-                                                        {isEditing ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => void handleRenameTime(t)}
-                                                                style={{
-                                                                    padding: "0.15rem 0.45rem",
-                                                                    borderRadius: "999px",
-                                                                    border: "none",
-                                                                    backgroundColor: "#e5e7eb",
-                                                                    color: "#111827",
-                                                                    fontSize: "0.75rem",
-                                                                    cursor: "pointer",
-                                                                }}
-                                                            >
-                                                                Lagre
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setEditingTimeId(t.id);
-                                                                    setEditingTimeName(t.name);
-                                                                }}
-                                                                style={{
-                                                                    padding: "0.15rem 0.45rem",
-                                                                    borderRadius: "999px",
-                                                                    border: "none",
-                                                                    backgroundColor: "#e5e7eb",
-                                                                    color: "#111827",
-                                                                    fontSize: "0.75rem",
-                                                                    cursor: "pointer",
-                                                                }}
-                                                            >
-                                                                Endre
-                                                            </button>
-                                                        )}
+                                                        {req.category} ({req.requiredCount}/{totalInGroup})
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                                        {/* Slett-knapp */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openDeleteTimeModal(t)}
+                                            {/* HØYRESIDE: knapper */}
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "0.5rem",
+                                                }}
+                                            >
+                                                {/* Endre / Lagre gruppe */}
+                                                <button
+                                                    className={"button-green admin-books-action"}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        isEditingReq
+                                                            ? void handleSaveRequirement(req)
+                                                            : startEditRequirement(req)
+                                                    }
+                                                    style={{
+                                                        padding: "0.45rem 0.9rem",
+                                                        cursor: "pointer",
+                                                        whiteSpace: "nowrap",
+                                                    }}
+                                                >
+                                                    {isEditingReq ? "Lagre" : "Endre navn"}
+                                                </button>
+
+                                                {/* Slett gruppe */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        openDeleteGroupModal({
+                                                            id: req.id,
+                                                            term: req.term,
+                                                            category: req.category
+                                                        })
+                                                    }
+                                                    style={{
+                                                        padding: "0.25rem 0.6rem",
+                                                        borderRadius: "999px",
+                                                        border: "none",
+                                                        backgroundColor: "#fee2e2",
+                                                        color: "#991b1b",
+                                                        fontSize: "0.75rem",
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
+                                                    Slett gruppe
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {catTimes.length > 0 ? (
+                                            <ul
+                                                style={{
+                                                    listStyle: "none",
+                                                    paddingLeft: 0,
+                                                    margin: "0 0 0.5rem 0",
+                                                    fontSize: "0.85rem",
+                                                }}
+                                            >
+                                                {catTimes.map((t) => {
+                                                    const isEditing = editingTimeId === t.id;
+
+                                                    return (
+                                                        <li
+                                                            key={t.id}
                                                             style={{
-                                                                padding: "0.15rem 0.45rem",
-                                                                borderRadius: "999px",
-                                                                border: "none",
-                                                                backgroundColor: "#fee2e2",
-                                                                color: "#b91c1c",
-                                                                fontSize: "0.75rem",
-                                                                cursor: "pointer",
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "space-between",
+                                                                padding: "0.15rem 0",
+                                                                borderBottom: "1px dashed #e5e7eb",
+                                                                gap: "0.5rem",
                                                             }}
                                                         >
-                                                            Slett
-                                                        </button>
-                                                    </div>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                ) : (
-                                    <p
-                                        style={{
-                                            margin: "0 0 0.5rem 0",
-                                            fontSize: "0.8rem",
-                                            color: "#9ca3af",
-                                        }}
-                                    >
-                                        Ingen timer lagt til i denne gruppen.
-                                    </p>
-                                )}
+                                                            <div style={{flex: 1}}>
+                                                                {isEditing ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editingTimeName}
+                                                                        onChange={(e) => setEditingTimeName(e.target.value)}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === "Enter") {
+                                                                                void handleRenameTime(t);
+                                                                            } else if (e.key === "Escape") {
+                                                                                setEditingTimeId(null);
+                                                                                setEditingTimeName("");
+                                                                            }
+                                                                        }}
+                                                                        autoFocus
+                                                                        style={{
+                                                                            width: "100%",
+                                                                            padding: "0.2rem 0.35rem",
+                                                                            borderRadius: "0.4rem",
+                                                                            border: "1px solid #d1d5db",
+                                                                            fontSize: "0.85rem",
+                                                                        }}
+                                                                    />
+                                                                ) : (
+                                                                    <span>{t.name}</span>
+                                                                )}
+                                                            </div>
 
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        gap: "0.5rem",
-                                        marginTop: "0.25rem",
-                                    }}
-                                >
-                                    <input
-                                        type="text"
-                                        placeholder="Ny time..."
-                                        value={newTimeName}
-                                        onChange={(e) =>
-                                            setNewTimeNameByReq((prev) => ({
-                                                ...prev,
-                                                [key]: e.target.value,
-                                            }))
-                                        }
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter") {
-                                                e.preventDefault();
-                                                void handleAddTime(req);
-                                            }
-                                        }}
-                                        style={{
-                                            flex: 1,
-                                            padding: "0.3rem 0.5rem",
-                                            borderRadius: "0.5rem",
-                                            border: "1px solid #d1d5db",
-                                            fontSize: "0.85rem",
-                                        }}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAddTime(req)}
-                                        style={{
-                                            padding: "0.35rem 0.8rem",
-                                            borderRadius: "999px",
-                                            border: "none",
-                                            backgroundColor: "#4b5563",
-                                            color: "#ffffff",
-                                            fontSize: "0.8rem",
-                                            cursor: "pointer",
-                                        }}
-                                    >
-                                        Legg til time
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                );
-            })()}
+                                                            <div
+                                                                style={{
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    gap: "0.35rem",
+                                                                }}
+                                                            >
+                                                                {/* Endre / Lagre-knapp */}
+                                                                {isEditing ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => void handleRenameTime(t)}
+                                                                        style={{
+                                                                            padding: "0.15rem 0.45rem",
+                                                                            borderRadius: "999px",
+                                                                            border: "none",
+                                                                            backgroundColor: "#e5e7eb",
+                                                                            color: "#111827",
+                                                                            fontSize: "0.75rem",
+                                                                            cursor: "pointer",
+                                                                        }}
+                                                                    >
+                                                                        Lagre
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setEditingTimeId(t.id);
+                                                                            setEditingTimeName(t.name);
+                                                                        }}
+                                                                        style={{
+                                                                            padding: "0.15rem 0.45rem",
+                                                                            borderRadius: "999px",
+                                                                            border: "none",
+                                                                            backgroundColor: "#e5e7eb",
+                                                                            color: "#111827",
+                                                                            fontSize: "0.75rem",
+                                                                            cursor: "pointer",
+                                                                        }}
+                                                                    >
+                                                                        Endre
+                                                                    </button>
+                                                                )}
 
-            {/* Bottom action: delete whole term with all its groups and times */}
-            {selectedTerm !== "" && isSuperAdmin && (
-                <div
-                    style={{
-                        marginTop: "1rem",
-                        display: "flex",
-                        justifyContent: "center",
-                    }}
-                >
-                    <button
-                        className={"btn-hover-danger"}
-                        type="button"
-                        onClick={openDeleteTermModal}
-                        style={{
-                            backgroundColor: "#ef4444",
-                            borderColor: "#ef4444",
-                            color: "white",
-                            fontSize: "0.9rem",
-                        }}
-                    >
-                        Slett termin
-                    </button>
-                </div>
-            )}
+                                                                {/* Slett-knapp */}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openDeleteTimeModal(t)}
+                                                                    style={{
+                                                                        padding: "0.15rem 0.45rem",
+                                                                        borderRadius: "999px",
+                                                                        border: "none",
+                                                                        backgroundColor: "#fee2e2",
+                                                                        color: "#b91c1c",
+                                                                        fontSize: "0.75rem",
+                                                                        cursor: "pointer",
+                                                                    }}
+                                                                >
+                                                                    Slett
+                                                                </button>
+                                                            </div>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        ) : (
+                                            <p
+                                                style={{
+                                                    margin: "0 0 0.5rem 0",
+                                                    fontSize: "0.8rem",
+                                                    color: "#9ca3af",
+                                                }}
+                                            >
+                                                Ingen timer lagt til i denne gruppen.
+                                            </p>
+                                        )}
 
-            {/* Modal: Bekreft sletting av termin */}
-            {deleteTermModal.open && deleteTermModal.termValue != null && (
-                <div
-                    role="dialog"
-                    aria-modal="true"
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        backgroundColor: "rgba(0,0,0,0.35)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "1rem",
-                        zIndex: 1000,
-                    }}
-                >
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                gap: "0.5rem",
+                                                marginTop: "0.25rem",
+                                            }}
+                                        >
+                                            <input
+                                                type="text"
+                                                placeholder="Ny time..."
+                                                value={newTimeName}
+                                                onChange={(e) =>
+                                                    setNewTimeNameByReq((prev) => ({
+                                                        ...prev,
+                                                        [key]: e.target.value,
+                                                    }))
+                                                }
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        void handleAddTime(req);
+                                                    }
+                                                }}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: "0.3rem 0.5rem",
+                                                    borderRadius: "0.5rem",
+                                                    border: "1px solid #d1d5db",
+                                                    fontSize: "0.85rem",
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAddTime(req)}
+                                                style={{
+                                                    padding: "0.35rem 0.8rem",
+                                                    borderRadius: "999px",
+                                                    border: "none",
+                                                    backgroundColor: "#4b5563",
+                                                    color: "#ffffff",
+                                                    fontSize: "0.8rem",
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                Legg til time
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    );
+                })()}
+
+                {/* Bottom action: delete whole term with all its groups and times */}
+                {selectedTerm !== "" && isSuperAdmin && (
                     <div
-                        className="page-card"
                         style={{
-                            textAlign: "center",
-                            maxWidth: 520,
-                            width: "100%",
-                            background: "#ffffff",
+                            marginTop: "1rem",
+                            display: "flex",
+                            justifyContent: "center",
                         }}
                     >
-                        <h3 style={{ marginTop: 0 }}>Slett termin?</h3>
-                        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
-                            {`Du er i ferd med å slette oppmøteboka for «${deleteTermModal.termLabel}».\n\n`}
-                            {`Dette vil slette selve terminen, alle grupper (${deleteTermModal.reqCount} stk) og alle timer (${deleteTermModal.timeCount} stk) som tilhører denne terminen.\n`}
-                        </p>
-                        <div
+                        <button
+                            className={"btn-hover-danger"}
+                            type="button"
+                            onClick={openDeleteTermModal}
                             style={{
-                                display: "flex",
-                                gap: "0.5rem",
-                                justifyContent: "center",
-                                marginTop: "0.75rem",
+                                backgroundColor: "#ef4444",
+                                borderColor: "#ef4444",
+                                color: "white",
+                                fontSize: "0.9rem",
                             }}
                         >
-                            <button
-                                className={"btn-hover-danger"}
-                                type="button"
-                                onClick={cancelDeleteTermModal}
-                                style={{
-                                    padding: "0.45rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    background: "#ef4444",
-                                    color: "black",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Avbryt
-                            </button>
-                            <button
-                                className={"btn-hover-lg"}
-                                type="button"
-                                onClick={() => void confirmDeleteTermModal()}
-                                style={{
-                                    padding: "0.45rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    background: "#ffffff",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Slett termin
-                            </button>
-                        </div>
+                            Slett termin
+                        </button>
                     </div>
-                </div>
-            )}
-            {/* Modal: Bekreft sletting av gruppe */}
-            {deleteGroupModal.open && deleteGroupModal.req && (
-                <div
-                    role="dialog"
-                    aria-modal="true"
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        backgroundColor: "rgba(0,0,0,0.35)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "1rem",
-                        zIndex: 1000,
-                    }}
-                >
-                    <div
-                        className="page-card"
-                        style={{
-                            maxWidth: 520,
-                            width: "100%",
-                            background: "#ffffff",
-                        }}
-                    >
-                        <h3 style={{ marginTop: 0 }}>Slett gruppe?</h3>
-                        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
-                            {`Du er i ferd med å slette gruppen «${deleteGroupModal.req.category}».\n\n`}
-                            {`Dette vil også slette alle tilhørende timer i denne gruppen for valgt termin (${deleteGroupModal.timeCount}).\n`}
-                            {`Handlingen kan ikke angres.`}
-                        </p>
-                        <div
-                            style={{
-                                display: "flex",
-                                gap: "0.5rem",
-                                justifyContent: "flex-end",
-                                marginTop: "0.75rem",
-                            }}
-                        >
-                            <button
-                                type="button"
-                                onClick={cancelDeleteGroupModal}
-                                style={{
-                                    padding: "0.45rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    background: "#ffffff",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Avbryt
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void confirmDeleteGroupModal()}
-                                style={{
-                                    padding: "0.45rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    background: "#ef4444",
-                                    color: "#ffffff",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Slett gruppe
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                )}
 
-            {/* Modal: Bekreft sletting av time */}
-            {deleteTimeModal.open && deleteTimeModal.time && (
-                <div
-                    role="dialog"
-                    aria-modal="true"
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        backgroundColor: "rgba(0,0,0,0.35)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "1rem",
-                        zIndex: 1000,
-                    }}
-                >
+                {/* Modal: Bekreft sletting av termin */}
+                {deleteTermModal.open && deleteTermModal.termValue != null && (
                     <div
-                        className="page-card"
+                        role="dialog"
+                        aria-modal="true"
                         style={{
-                            maxWidth: 520,
-                            width: "100%",
-                            background: "#ffffff",
+                            position: "fixed",
+                            inset: 0,
+                            backgroundColor: "rgba(0,0,0,0.35)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "1rem",
+                            zIndex: 1000,
                         }}
                     >
-                        <h3 style={{ marginTop: 0 }}>Slett time?</h3>
-                        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.4 }}>
-                            {`Du er i ferd med å slette timen «${deleteTimeModal.time.name}» i gruppen «${deleteTimeModal.time.category}» for ${labelForTerm(deleteTimeModal.time.term)}.\n\n`}
-                            {`Historiske sesjoner beholdes, men timen forsvinner fra admin-oppsettet.\n`}
-                            {`Handlingen kan ikke angres.`}
-                        </p>
                         <div
+                            className="page-card"
                             style={{
-                                display: "flex",
-                                gap: "0.5rem",
-                                justifyContent: "flex-end",
-                                marginTop: "0.75rem",
+                                textAlign: "center",
+                                maxWidth: 520,
+                                width: "100%",
+                                background: "#ffffff",
                             }}
                         >
-                            <button
-                                type="button"
-                                onClick={cancelDeleteTimeModal}
-                                style={{
-                                    padding: "0.45rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    background: "#ffffff",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Avbryt
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void confirmDeleteTimeModal()}
-                                style={{
-                                    padding: "0.45rem 0.9rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    background: "#ef4444",
-                                    color: "#ffffff",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Slett time
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </section>
-        {/* Modals for sorting */}
-        {showTermSort && (
-            <div
-                style={{
-                    position: "fixed",
-                    inset: 0,
-                    backgroundColor: "rgba(15,23,42,0.35)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 50,
-                }}
-            >
-                <div
-                    style={{
-                        width: "100%",
-                        maxWidth: "420px",
-                        backgroundColor: "#ffffff",
-                        borderRadius: "1rem",
-                        padding: "1rem 1.25rem",
-                        boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
-                    }}
-                >
-                    <h3 style={{ marginTop: 0 }}>Sorter oppmøtebøker</h3>
-                    <ul style={{ listStyle: "none", padding: 0, margin: "0 0 0.75rem" }}>
-                        {termSortList.map((t, idx) => (
-                            <li
-                                key={t.docId}
+                            <h3 style={{marginTop: 0}}>Slett termin?</h3>
+                            <p style={{whiteSpace: "pre-wrap", lineHeight: 1.4}}>
+                                {`Du er i ferd med å slette oppmøteboka for «${deleteTermModal.termLabel}».\n\n`}
+                                {`Dette vil slette selve terminen, alle grupper (${deleteTermModal.reqCount} stk) og alle timer (${deleteTermModal.timeCount} stk) som tilhører denne terminen.\n`}
+                            </p>
+                            <div
                                 style={{
                                     display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    border: "1px solid #e5e7eb",
-                                    borderRadius: "0.5rem",
-                                    padding: "0.4rem 0.6rem",
-                                    marginBottom: "0.4rem",
+                                    gap: "0.5rem",
+                                    justifyContent: "center",
+                                    marginTop: "0.75rem",
                                 }}
                             >
-                                <span style={{ fontSize: "0.9rem" }}>{t.label || `Termin ${t.value}`}</span>
-                                <span style={{ display: "flex", gap: "0.25rem" }}>
+                                <button
+                                    className={"btn-hover-danger"}
+                                    type="button"
+                                    onClick={cancelDeleteTermModal}
+                                    style={{
+                                        padding: "0.45rem 0.9rem",
+                                        borderRadius: "999px",
+                                        border: "none",
+                                        background: "#ef4444",
+                                        color: "black",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Avbryt
+                                </button>
+                                <button
+                                    className={"btn-hover-lg"}
+                                    type="button"
+                                    onClick={() => void confirmDeleteTermModal()}
+                                    style={{
+                                        padding: "0.45rem 0.9rem",
+                                        borderRadius: "999px",
+                                        border: "1px solid #d1d5db",
+                                        background: "#ffffff",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Slett termin
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {/* Modal: Bekreft sletting av gruppe */}
+                {deleteGroupModal.open && deleteGroupModal.req && (
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        style={{
+                            position: "fixed",
+                            inset: 0,
+                            backgroundColor: "rgba(0,0,0,0.35)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "1rem",
+                            zIndex: 1000,
+                        }}
+                    >
+                        <div
+                            className="page-card"
+                            style={{
+                                maxWidth: 520,
+                                width: "100%",
+                                background: "#ffffff",
+                            }}
+                        >
+                            <h3 style={{marginTop: 0}}>Slett gruppe?</h3>
+                            <p style={{whiteSpace: "pre-wrap", lineHeight: 1.4}}>
+                                {`Du er i ferd med å slette gruppen «${deleteGroupModal.req.category}».\n\n`}
+                                {`Dette vil også slette alle tilhørende timer i denne gruppen for valgt termin (${deleteGroupModal.timeCount}).\n`}
+                                {`Handlingen kan ikke angres.`}
+                            </p>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: "0.5rem",
+                                    justifyContent: "flex-end",
+                                    marginTop: "0.75rem",
+                                }}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={cancelDeleteGroupModal}
+                                    style={{
+                                        padding: "0.45rem 0.9rem",
+                                        borderRadius: "999px",
+                                        border: "1px solid #d1d5db",
+                                        background: "#ffffff",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Avbryt
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void confirmDeleteGroupModal()}
+                                    style={{
+                                        padding: "0.45rem 0.9rem",
+                                        borderRadius: "999px",
+                                        border: "none",
+                                        background: "#ef4444",
+                                        color: "#ffffff",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Slett gruppe
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal: Bekreft sletting av time */}
+                {deleteTimeModal.open && deleteTimeModal.time && (
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        style={{
+                            position: "fixed",
+                            inset: 0,
+                            backgroundColor: "rgba(0,0,0,0.35)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "1rem",
+                            zIndex: 1000,
+                        }}
+                    >
+                        <div
+                            className="page-card"
+                            style={{
+                                maxWidth: 520,
+                                width: "100%",
+                                background: "#ffffff",
+                            }}
+                        >
+                            <h3 style={{marginTop: 0}}>Slett time?</h3>
+                            <p style={{whiteSpace: "pre-wrap", lineHeight: 1.4}}>
+                                {`Du er i ferd med å slette timen «${deleteTimeModal.time.name}» i gruppen «${deleteTimeModal.time.category}» for ${labelForTerm(deleteTimeModal.time.term)}.\n\n`}
+                                {`Historiske sesjoner beholdes, men timen forsvinner fra admin-oppsettet.\n`}
+                                {`Handlingen kan ikke angres.`}
+                            </p>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: "0.5rem",
+                                    justifyContent: "flex-end",
+                                    marginTop: "0.75rem",
+                                }}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={cancelDeleteTimeModal}
+                                    style={{
+                                        padding: "0.45rem 0.9rem",
+                                        borderRadius: "999px",
+                                        border: "1px solid #d1d5db",
+                                        background: "#ffffff",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Avbryt
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void confirmDeleteTimeModal()}
+                                    style={{
+                                        padding: "0.45rem 0.9rem",
+                                        borderRadius: "999px",
+                                        border: "none",
+                                        background: "#ef4444",
+                                        color: "#ffffff",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Slett time
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </section>
+            {/* Modals for sorting */}
+            {showTermSort && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(15,23,42,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                    }}
+                >
+                    <div
+                        style={{
+                            width: "100%",
+                            maxWidth: "420px",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "1rem",
+                            padding: "1rem 1.25rem",
+                            boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                        }}
+                    >
+                        <h3 style={{marginTop: 0}}>Sorter oppmøtebøker</h3>
+                        <ul style={{listStyle: "none", padding: 0, margin: "0 0 0.75rem"}}>
+                            {termSortList.map((t, idx) => (
+                                <li
+                                    key={t.docId}
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        border: "1px solid #e5e7eb",
+                                        borderRadius: "0.5rem",
+                                        padding: "0.4rem 0.6rem",
+                                        marginBottom: "0.4rem",
+                                    }}
+                                >
+                                    <span style={{fontSize: "0.9rem"}}>{t.label || `Termin ${t.value}`}</span>
+                                    <span style={{display: "flex", gap: "0.25rem"}}>
                                     <button
                                         type="button"
                                         onClick={() => moveTerm(idx, -1)}
                                         disabled={idx === 0}
-                                        style={{ padding: "0.2rem 0.4rem", borderRadius: "0.35rem", border: "1px solid #d1d5db", background: "#fff" }}
+                                        style={{
+                                            padding: "0.2rem 0.4rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #d1d5db",
+                                            background: "#fff"
+                                        }}
                                     >
                                         ▲
                                     </button>
@@ -4152,78 +3881,99 @@ const TermSetup: React.FC = () => {
                                         type="button"
                                         onClick={() => moveTerm(idx, 1)}
                                         disabled={idx === termSortList.length - 1}
-                                        style={{ padding: "0.2rem 0.4rem", borderRadius: "0.35rem", border: "1px solid #d1d5db", background: "#fff" }}
+                                        style={{
+                                            padding: "0.2rem 0.4rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #d1d5db",
+                                            background: "#fff"
+                                        }}
                                     >
                                         ▼
                                     </button>
                                 </span>
-                            </li>
-                        ))}
-                    </ul>
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                        <button
-                            type="button"
-                            onClick={() => setShowTermSort(false)}
-                            style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "1px solid #d1d5db", background: "#fff" }}
-                        >
-                            Avbryt
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void saveTermOrder()}
-                            style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "#fff" }}
-                        >
-                            Lagre rekkefølge
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {showGroupSort && (
-            <div
-                style={{
-                    position: "fixed",
-                    inset: 0,
-                    backgroundColor: "rgba(15,23,42,0.35)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 50,
-                }}
-            >
-                <div
-                    style={{
-                        width: "100%",
-                        maxWidth: "420px",
-                        backgroundColor: "#ffffff",
-                        borderRadius: "1rem",
-                        padding: "1rem 1.25rem",
-                        boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
-                    }}
-                >
-                    <h3 style={{ marginTop: 0 }}>Sorter grupper</h3>
-                    <ul style={{ listStyle: "none", padding: 0, margin: "0 0 0.75rem" }}>
-                        {groupSortList.map((g, idx) => (
-                            <li
-                                key={g.id}
+                                </li>
+                            ))}
+                        </ul>
+                        <div style={{display: "flex", justifyContent: "flex-end", gap: "0.5rem"}}>
+                            <button
+                                type="button"
+                                onClick={() => setShowTermSort(false)}
                                 style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    border: "1px solid #e5e7eb",
-                                    borderRadius: "0.5rem",
-                                    padding: "0.4rem 0.6rem",
-                                    marginBottom: "0.4rem",
+                                    padding: "0.35rem 0.7rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    background: "#fff"
                                 }}
                             >
-                                <span style={{ fontSize: "0.9rem" }}>{g.category}</span>
-                                <span style={{ display: "flex", gap: "0.25rem" }}>
+                                Avbryt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void saveTermOrder()}
+                                style={{
+                                    padding: "0.35rem 0.7rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    background: "#16a34a",
+                                    color: "#fff"
+                                }}
+                            >
+                                Lagre rekkefølge
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showGroupSort && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(15,23,42,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                    }}
+                >
+                    <div
+                        style={{
+                            width: "100%",
+                            maxWidth: "420px",
+                            backgroundColor: "#ffffff",
+                            borderRadius: "1rem",
+                            padding: "1rem 1.25rem",
+                            boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
+                        }}
+                    >
+                        <h3 style={{marginTop: 0}}>Sorter grupper</h3>
+                        <ul style={{listStyle: "none", padding: 0, margin: "0 0 0.75rem"}}>
+                            {groupSortList.map((g, idx) => (
+                                <li
+                                    key={g.id}
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        border: "1px solid #e5e7eb",
+                                        borderRadius: "0.5rem",
+                                        padding: "0.4rem 0.6rem",
+                                        marginBottom: "0.4rem",
+                                    }}
+                                >
+                                    <span style={{fontSize: "0.9rem"}}>{g.category}</span>
+                                    <span style={{display: "flex", gap: "0.25rem"}}>
                                     <button
                                         type="button"
                                         onClick={() => moveGroup(idx, -1)}
                                         disabled={idx === 0}
-                                        style={{ padding: "0.2rem 0.4rem", borderRadius: "0.35rem", border: "1px solid #d1d5db", background: "#fff" }}
+                                        style={{
+                                            padding: "0.2rem 0.4rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #d1d5db",
+                                            background: "#fff"
+                                        }}
                                     >
                                         ▲
                                     </button>
@@ -4231,33 +3981,49 @@ const TermSetup: React.FC = () => {
                                         type="button"
                                         onClick={() => moveGroup(idx, 1)}
                                         disabled={idx === groupSortList.length - 1}
-                                        style={{ padding: "0.2rem 0.4rem", borderRadius: "0.35rem", border: "1px solid #d1d5db", background: "#fff" }}
+                                        style={{
+                                            padding: "0.2rem 0.4rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #d1d5db",
+                                            background: "#fff"
+                                        }}
                                     >
                                         ▼
                                     </button>
                                 </span>
-                            </li>
-                        ))}
-                    </ul>
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                        <button
-                            type="button"
-                            onClick={() => setShowGroupSort(false)}
-                            style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "1px solid #d1d5db", background: "#fff" }}
-                        >
-                            Avbryt
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => void saveGroupOrder()}
-                            style={{ padding: "0.35rem 0.7rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "#fff" }}
-                        >
-                            Lagre rekkefølge
-                        </button>
+                                </li>
+                            ))}
+                        </ul>
+                        <div style={{display: "flex", justifyContent: "flex-end", gap: "0.5rem"}}>
+                            <button
+                                type="button"
+                                onClick={() => setShowGroupSort(false)}
+                                style={{
+                                    padding: "0.35rem 0.7rem",
+                                    borderRadius: "999px",
+                                    border: "1px solid #d1d5db",
+                                    background: "#fff"
+                                }}
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void saveGroupOrder()}
+                                style={{
+                                    padding: "0.35rem 0.7rem",
+                                    borderRadius: "999px",
+                                    border: "none",
+                                    background: "#16a34a",
+                                    color: "#fff"
+                                }}
+                            >
+                                Lagre rekkefølge
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        )}
+            )}
         </>
     );
 };
@@ -4266,7 +4032,7 @@ const TermSetup: React.FC = () => {
 // ---------- Hoved AdminPage med gamle knappe-struktur ----------
 
 const AdminPage: React.FC = () => {
-    const { user, loading, logout } = useAuth();
+    const {user, loading, logout} = useAuth();
     const [mainTab, setMainTab] = useState<"setup" | "users" | "teacherView">(
         "setup"
     );
@@ -4282,7 +4048,7 @@ const AdminPage: React.FC = () => {
                     justifyContent: "center",
                 }}
             >
-                <LoadingSpinner />
+                <LoadingSpinner/>
             </div>
         );
     }
@@ -4290,14 +4056,14 @@ const AdminPage: React.FC = () => {
     if (!user || user.role !== "admin") {
         return (
             <div
-            style={{
-                minHeight: "100vh",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "1.5rem",
-            }}
-        >
+                style={{
+                    minHeight: "100vh",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "1.5rem",
+                }}
+            >
                 <div className="page-card page-card--admin">
                     <h2>Ingen tilgang</h2>
                     <p>Du må være logget inn som administrator for å se denne siden.</p>
@@ -4308,134 +4074,38 @@ const AdminPage: React.FC = () => {
 
     return (
         <>
-        <div
-            style={{
-                minHeight: "100vh",
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "center",
-                padding: "1.5rem 1rem",
-            }}
-        >
-            <div className="page-card page-card--admin">
-                {/* Topp: navn + logg ut */}
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "0.75rem",
-                    }}
-                >
-                    <div style={{ fontWeight: 600 }}>
-                        {user.displayName || user.email}
-                    </div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                        <button
-                            type="button"
-                            onClick={() => setShowProfile(true)}
-                            style={{
-                                padding: "0.35rem 0.9rem",
-                                borderRadius: "999px",
-                                border: "1px solid #d1d5db",
-                                background: "#ffffff",
-                                cursor: "pointer",
-                                fontSize: "0.85rem",
-                            }}
-                        >
-                            Min profil
-                        </button>
-                        <button
-                            type="button"
-                            onClick={logout}
-                            style={{
-                                padding: "0.35rem 0.9rem",
-                                borderRadius: "999px",
-                                border: "1px solid #d1d5db",
-                                background: "#ffffff",
-                                cursor: "pointer",
-                                fontSize: "0.85rem",
-                            }}
-                        >
-                            Logg ut
-                        </button>
-                    </div>
+            <div className="admin-page">
+                <div id="users" className="">
+                    <h1>Administrer brukere</h1>
+                    <p>Her kan du som administrator legge til, fjerne og redigere studenter lærere og andre
+                        administratorer.</p>
+                    {/* Brukeradministrasjon med rollefilter */}
+                    <UsersAdmin/>
                 </div>
-                <header
-                    style={{
-                        marginBottom: "1rem",
-                        borderBottom: "1px solid #e5e7eb",
-                        paddingBottom: "0.75rem",
-                    }}
-                >
-                    <h2 style={{ margin: 0 }}>Adminpanel</h2>
-                    <p
-                        style={{
-                            margin: "0.25rem 0 0.75rem",
-                            fontSize: "0.85rem",
-                            color: "#6b7280",
-                        }}
-                    >
-                        Oppsett av oppmøtebøker og administrasjon av brukere.
-                    </p>
+                <div id="attendance-books" className="visually-hidden">
+                    <h1>Administrer oppmøtebøker</h1>
+                    <p>Her kan du som administrator legge til, fjerne og redigere gruppetimer for de ulike
+                        semesterne. </p>
+                </div>
 
-                    {/* Øverste knapper: Oppmøtebøker / Brukere */}
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: "0.5rem",
-                        }}
-                    >
-                        <button
-                            type="button"
-                            onClick={() => setMainTab("setup")}
-                            style={{
-                                flex: 1,
-                                padding: "0.35rem 0.5rem",
-                                borderRadius: "999px",
-                                border: "1px solid #e5e7eb",
-                                background:
-                                    mainTab === "setup" ? "#6CE1AB" : "#ffffff",
-                                color: mainTab === "setup" ? "black" : "#111827",
-                                fontSize: "0.85rem",
-                                cursor: "pointer",
-                            }}
-                        >
-                            Oppmøtebøker
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setMainTab("users")}
-                            style={{
-                                flex: 1,
-                                padding: "0.35rem 0.5rem",
-                                borderRadius: "999px",
-                                border: "1px solid #e5e7eb",
-                                background:
-                                    mainTab === "users" ? "#6CE1AB" : "#ffffff",
-                                color: mainTab === "users" ? "black" : "#111827",
-                                fontSize: "0.85rem",
-                                cursor: "pointer",
-                            }}
-                        >
-                            Brukere
-                        </button>
-                    </div>
-                </header>
+                <div id="statistics" className="visually-hidden">
+                    <h1>Se statistikk</h1>
+                    <p>Her kan du som overordnet administrator se statisikk om oppmøteboka, timer og registereringer
+                        samt nettside info</p>
+                </div>
+                <div>
 
-                {mainTab === "setup" && <TermSetup />}
-                {mainTab === "users" && <UsersAdmin />}
+                </div>
+                {showProfile && (
+                    <ProfileModal
+                        uid={user.uid}
+                        role={user.role}
+                        email={user.email}
+                        displayName={user.displayName}
+                        onClose={() => setShowProfile(false)}
+                    />
+                )}
             </div>
-        </div>
-        {showProfile && (
-            <ProfileModal
-                uid={user.uid}
-                role={user.role}
-                email={user.email}
-                displayName={user.displayName}
-                onClose={() => setShowProfile(false)}
-            />
-        )}
         </>
     );
 };

@@ -1,33 +1,3 @@
-/* GENERAL */
-#main {
-    min-height: 100vh;
-    text-align: center;
-}
-
-#main, header {
-    margin: 2rem 1.5rem 0 1.5rem;
-}
-
-.card {
-    background: var(--color-card-background);
-    border: 3px solid var(--color-black);
-    width: 100%;
-    max-width: 400px;
-    h1 {
-        font-size: 1.8rem;
-    }
-}
-
-footer {
-    width: 100%;
-}
-
-.round-corners-whole-f {border-radius: 30px;}
-.round-corners-whole-h {border-radius: 15px;}
-.round-corner-bottom-f {border-radius: 0 0 30px 30px;}
-.round-corner-top-f {border-radius: 30px 30px 0 0;}
-
-
 .input-group, .authError{
     display: flex;
     flex-direction: column;
@@ -35,76 +5,11 @@ footer {
     margin-bottom: 35px;
 }
 
-.input-label {
-    margin-left: 15px;
-    margin-bottom: 7px;
-}
-
-.input-field {
-    border: 2px solid var(--color-input-borderline);
-}
-
 .input-full {
     width: 100%;
 }
-
-.button-primary {
-    width: 100%;
-    font-size: 18px;
-    font-style: normal;
-    font-weight: 700;
-}
-
-.button-colorless {
-    background-color: transparent;
-    color: var(--color-black);
-}
-
-
-.button-opacity {
-    opacity: 0.5;
-}
-
-.button-black {
-    background-color: var(--color-black);
-    color: white;
-}
-
-.button-yellow {
-    border-color: var(--color-yellow-l) !important;
-    background-color: var(--color-yellow-l);
-    color: var(--color-black);
-}
-
-.button-white {
-    background-color: var(--color-white);
-    color: var(--color-black) !important;
-}
-
-.button-small {
-    text-align: center;
-    padding: 8px 15px;
-    height: min-content;
-    border-radius: 10px;
-    border-width: 3px;
-}
-
-.button-thin {
-    padding: 4px 10px;
-    border-width: 1px;
-}
-
-.button-border {
-    border: 2px solid;
-}
-
-
-.login-card button {
-    margin-top: 1.1rem;
-}
-
-.input-field, .button-primary {
-    height: 60px;
+.input-half {
+    width: 50%;
 }
 
 /* LOGIN PAGE */
@@ -120,61 +25,65 @@ footer {
     }
 }
 
-.login-card, .teacher-card {
+#login-card, #teacher-card {
     h1 {
        margin: 2rem 0 3rem;
     }
 }
 
+#login-card button {
+    margin-top: 1rem;
+}
+
 .card {
-    padding: 0 1.8rem;
-    margin-bottom: 2rem;
-}
-
-.student-card-top, .student-overview-card, .teacher-recent-sessions {
     margin-top: 4rem;
-}
-.student-card-bottom, .student-overview-card, .teacher-recent-sessions {
     margin-bottom: 4rem;
+    padding: 2rem;
 }
 
-.student-card-top {
-    border-bottom: 0;
+.card-bottom, #teacher-card {
+    min-height: 25rem;
+}
+
+.card-top {
+    /* remove bottom margin from last card */
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.card-bottom {
+    padding-top: 0;
+    margin-top: 0;
+}
+
+.card-top {
     background-color: var(--color-black);
-    border-radius: 30px 30px 0 0;
     display: flex;
     justify-content: space-between;
-    margin-bottom: 0;
-    .studentInfo {
-        padding: 1.5rem 0 1.5rem;
-        text-align: left;
-        h2, p {
-            color: var(--color-white);
-        }
+    padding: 1.5rem 2rem 0;
+    text-align: left;
+    p {
+        margin-top: 0.5rem;
     }
-        img {
-            height: 5rem;
-            align-self: end;
+    img {
+       height: 4rem;
     }
 }
 
-.student-card-bottom, .teacher-card {
-    min-height: 20rem;
+.card-bottom, .teacher-card {
     align-content: center;
+
     .code-input-container {
         p {
-            padding-top: 2.5rem;
-            margin-bottom: 1rem;
+            margin-bottom: 2rem;
         }
     }
-
     .qr-code-icon {
-        margin-top: 2rem;
-        height: 2rem;
+        margin-top: 3rem;
+        height: 2.5rem;
     }
-
-    .QRbutton {
-        padding-bottom: 2.5rem;
+    .qr-code-button {
+        margin-top: 0.5rem;
     }
 
     .registered-sucsess, .registered-error {
@@ -200,6 +109,8 @@ footer {
         margin-top: 3rem;
         width: 100%;
         text-align: left;
+        /* width for first column (status/check icon) to help align nested detail rows */
+        --first-col-width: 2rem;
 
         tr {
             border-bottom: 1px solid rgba(255, 255, 255, 0.15);
@@ -207,11 +118,21 @@ footer {
             justify-self: center;
         }
 
+        /* remove underline on the very last row of the main table */
+        > tbody > tr:last-child {
+            border-bottom: none;
+        }
+
         td {
             vertical-align: middle;
             img {
                 height: 1rem;
             }
+        }
+
+        td.requirement-meet-icon {
+            width: var(--first-col-width);
+            text-align: center;
         }
 
         .class-overview {
@@ -222,6 +143,44 @@ footer {
             text-align: center;
             padding-right: 1rem;
         }
+
+        /* Detail (subtable) styles */
+        td.detail-cell {
+            padding: 0.25rem 0 0.5rem 0; /* top/bottom breathing room */
+            border-bottom: none; /* the inner rows will draw their own separators */
+        }
+        .subtable-wrapper {
+            /* align left edge with the start of the parent table's 2nd cell content
+               (first column width + padding-left of .class-overview) */
+            margin-left: calc(var(--first-col-width) + 0.5rem);
+        }
+        table.subtable {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto; /* independent from parent */
+        }
+        table.subtable tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            height: 2rem;
+        }
+        /* remove underline on the last row inside each subtable */
+        table.subtable tr:last-child {
+            border-bottom: none;
+        }
+        table.subtable td {
+            vertical-align: middle;
+            padding: 0.25rem 0.25rem;
+        }
+        .subtable-icon-cell {
+            width: 1.25rem;
+        }
+        .subtable-name-cell {
+            text-align: left;
+        }
+        .subtable-date-cell {
+            text-align: right;
+            white-space: nowrap;
+        }
     }
 }
 
@@ -230,11 +189,16 @@ footer {
     border-color: var(--color-yellow-l);
     display: flex;
     flex-direction: column;
-    padding-bottom: 2rem;
 
-    .button-next-semester {
-        margin-top: 2rem;
-    }
+}
+
+#start-next-semester-button {
+    color: var(--color-yellow-l);
+    margin: 2rem 0 1rem;
+}
+
+#gap-life-button {
+    color: var(--color-black);
 }
 
 .student-overview-card, .approved-term-card, .teacher-card, .teacher-recent-sessions {
@@ -250,3 +214,65 @@ footer {
         }
     }
 }
+
+.teacher-card {
+    h2 {
+        margin-bottom: 1.75rem;
+    }
+    .termButtons {
+        margin-top: 4rem;
+    }
+}
+
+.admin-page {
+    max-width: 1200px;
+    h1 {
+        margin-top: 5rem;
+    }
+    p {
+        @media (min-width: 700px) {
+            width: 40%;
+        }
+
+    }
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 2rem;
+    margin-bottom: 3rem;
+}
+
+
+/* Admin tables (moved from inline styles in AdminPage.tsx) */
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.admin-table thead th {
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb; /* neutral-200 */
+    padding: 0.25rem;
+    font-weight: 600;
+}
+
+.admin-table tbody td {
+    padding: 0.25rem;
+    border-bottom: 1px solid #f3f4f6; /* neutral-100 */
+}
+
+.admin-table__row--clickable {
+    cursor: pointer;
+}
+
+.admin-table__empty {
+    padding: 0.4rem;
+    font-size: 0.85rem;
+    color: #6b7280; /* gray-500 */
+}
+
+
+

@@ -10,61 +10,170 @@ html {
 
 /* MOBILE */
 @media (max-width: 576px) {
-    * {font-size: var(--mobile-root-font-size);}
-    h1 {font-size: 1.5rem}
-    h2 {font-size: 1.4rem}
-    h3 {font-size: 1.25rem}
-    h4 {font-size: 1.15rem}
+    * {
+        font-size: var(--mobile-root-font-size);
+    }
+
+    h1 {
+        font-size: 1.5rem
+    }
+
+    h2 {
+        font-size: 1.4rem
+    }
+
+    h3 {
+        font-size: 1.25rem
+    }
+
+    h4 {
+        font-size: 1.15rem
+    }
+
     /* Prevent iOS Safari from zooming inputs on focus by enforcing 16px font-size on small screens */
-    input, select, textarea, button { font-size: var(--mobile-root-font-size) !important; }
+    input, select, textarea, button {
+        font-size: var(--mobile-root-font-size) !important;
+    }
 }
 
 /* TABLET */
 @media (min-width: 577px) {
-    * {font-size: var(--tablet-root-font-size);}
-    h1 {font-size: 2.125rem}
-    h2 {font-size: 1.35rem}
-    h3 {font-size: 1.25rem}
-    h4 {font-size: 1.125rem}
+    * {
+        font-size: var(--tablet-root-font-size);
+    }
+
+    h1 {
+        font-size: 2.125rem
+    }
+
+    h2 {
+        font-size: 1.35rem
+    }
+
+    h3 {
+        font-size: 1.25rem
+    }
+
+    h4 {
+        font-size: 1.125rem
+    }
 }
 
 /* DESKTOP */
 @media (min-width: 577px) {
-    * {font-size: var(--tablet-root-font-size);}
-    h1 {font-size: 2.125rem}
-    h2 {font-size: 1.35rem}
-    h3 {font-size: 1.25rem}
-    h4 {font-size: 1.125rem}
+    * {
+        font-size: var(--tablet-root-font-size);
+    }
+
+    h1 {
+        font-size: 1.9rem
+    }
+
+    h2 {
+        font-size: 1.35rem
+    }
+
+    h3 {
+        font-size: 1.25rem
+    }
+
+    h4 {
+        font-size: 1.125rem
+    }
 }
 
 body {
-    h1 {line-height: 1;     letter-spacing: -0.01rem;}
-    h2 {line-height: 1.067; letter-spacing: 0.03rem;}
-    h3 {line-height: 1.083; letter-spacing: 0.02rem;}
-    h4 {line-height: 1.1;   letter-spacing: 0.01rem;}
-    h5 {line-height: 1.111; letter-spacing: 0.01rem;}
-    h6 {line-height: 1.125; letter-spacing: 0.01rem;}
-    p {line-height: 1.3;    letter-spacing: 0.01rem;}
-    h1, h2, h3, h4, h5 {font-weight: 600}
-    input, select {font-size: 1.1rem}
-    button {font-size: 1rem}
+    h1 {
+        line-height: 1;
+        letter-spacing: 0.03rem;
+    }
+
+    h2 {
+        line-height: 1.067;
+        letter-spacing: 0.03rem;
+    }
+
+    h3 {
+        line-height: 1.083;
+        letter-spacing: 0.02rem;
+    }
+
+    h4 {
+        line-height: 1.1;
+        letter-spacing: 0.01rem;
+    }
+
+    h5 {
+        line-height: 1.111;
+        letter-spacing: 0.01rem;
+    }
+
+    h6 {
+        line-height: 1.125;
+        letter-spacing: 0.01rem;
+    }
+
+    p {
+        line-height: 1.3;
+        letter-spacing: 0.02rem;
+    }
+
+    input, select {
+        font-size: 1.1rem;
+        letter-spacing: 0.02rem;
+    }
+
+    button {
+        font-size: 1rem;
+        letter-spacing: 0.02rem;
+    }
 }
 
 /* Font Weight */
-.thinFont {font-weight: 100;}
-.normalFont {font-weight: 400;}
-.boldFont {font-weight: 700;}
+.thinFont {
+    font-weight: 100;
+}
+
+.normalFont {
+    font-weight: 400;
+}
+
+.boldFont {
+    font-weight: 700;
+}
 
 /* Font Opacity */
-.opaqueFont {opacity: 0.8;}
+.opaqueFont {
+    opacity: 0.8;
+}
 
 /* Text Color */
-.errorTxt {color: var(--color-red-f);}
-.successTxt {color: var(--color-yellow-f);}
+.errorTxt {
+    color: var(--color-red-f);
+}
+.successTxt {
+    color: var(--color-yellow-f);
+}
+.whiteTxt {
+    color: var(--color-white);
+}
 
 /* Font sizes */
-.smallText {font-size: 0.8em;}
-.spacedFont {letter-spacing: 0.03rem;}
+.smallText {
+    font-size: 0.8em;
+}
+
+.spacedFont {
+    letter-spacing: 0.03rem;
+}
 
 /* Font decorations*/
-.fontUnderline {text-decoration: underline;}
+.fontUnderline {
+    text-decoration: underline;
+}
+
+.fontUnderline:hover {
+    text-decoration: none;
+}
+
+}

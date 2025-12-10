@@ -1,5 +1,4 @@
-import {useEffect, useMemo, useState} from "react";
-import type React from "react";
+import React, {useEffect, useState} from "react";
 import type {AppUser} from "./hooks/useAuth";
 import {db} from "./firebase";
 import {
@@ -67,11 +66,11 @@ function StudentPage({user}: StudentPageProps) {
 
     const {options: termOptions} = useTermOptions();
 
-    // Detaljmodal for gruppe → viser hver time og status (registrert/mangler)
-    const [groupModalOpen, setGroupModalOpen] = useState(false);
-    const [groupModalCategory, setGroupModalCategory] = useState<string | null>(null);
+    // Dropdown-detaljer per kategori
+    const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
     const [allTimes, setAllTimes] = useState<TimeRow[]>([]);
     const [attendedByTimeId, setAttendedByTimeId] = useState<Record<string, boolean>>({});
+    const [attendedAtByTimeId, setAttendedAtByTimeId] = useState<Record<string, Timestamp | undefined>>({});
 
     // Suksess / feil-visning
     const [status, setStatus] = useState<StatusState>("idle");
@@ -125,7 +124,7 @@ function StudentPage({user}: StudentPageProps) {
             }
 
             // Persistér til Firestore for gjenbruk på andre enheter
-            await setDoc(userRef, { authUid: anon }, { merge: true });
+            await setDoc(userRef, {authUid: anon}, {merge: true});
             return anon;
         } catch (e) {
             console.warn("Kunne ikke generere/lagre authUid, bruker fallback i minnet.", e);
@@ -139,7 +138,7 @@ function StudentPage({user}: StudentPageProps) {
         setLoading(true);
         setStatus("idle");
         setStatusMessage(null);
-
+        
         try {
             const sessionsCol = collection(db, "sessions");
             const qSessions = query(sessionsCol, where("code", "==", inputCode));
@@ -154,8 +153,59 @@ function StudentPage({user}: StudentPageProps) {
                 return;
             }
 
-            const sessionDoc = snap.docs[0];
+            // Hvis flere økter har samme kode (historikk), forsøk å velge den som matcher studentens termin
+            let sessionDoc = snap.docs[0];
+            if (snap.docs.length > 1) {
+                const match = snap.docs.find((d) => {
+                    const data = d.data() as any;
+                    const termVal =
+                        typeof data?.term === "number" ? data.term : Number(data?.term);
+                    return Number.isFinite(termVal) && termVal === selectedTerm;
+                });
+                if (match) sessionDoc = match;
+            }
             const sessionData = sessionDoc.data() as any;
+
+            // Termin-sperre: studenten kan kun registrere på økter i sin nåværende termin
+            const currentTerm =
+                typeof selectedTerm === "number"
+                    ? selectedTerm
+                    : typeof user.term === "number"
+                        ? user.term
+                        : null;
+            const sessionTerm =
+                typeof sessionData?.term === "number"
+                    ? sessionData.term
+                    : Number(sessionData?.term);
+
+            if (currentTerm == null) {
+                setStatus("error");
+                setStatusMessage(
+                    "Kontoen din mangler tilknytning til en termin. Kontakt lærer/admin for å få satt riktig termin før du registrerer oppmøte."
+                );
+                setCode("");
+                setScanning(false);
+                setLoading(false);
+                return;
+            }
+
+            if (!Number.isFinite(sessionTerm) || sessionTerm !== currentTerm) {
+                const sessLabel = Number.isFinite(sessionTerm)
+                    ? labelFromTerm(termOptions, sessionTerm as number)
+                    : "ukjent termin";
+                const userLabel = labelFromTerm(termOptions, currentTerm);
+                // Vis spesifikk tekst kun dersom økten med koden faktisk er åpen
+                const isOpen = !!(sessionData && (sessionData as any).isOpen);
+                const msg = isOpen
+                    ? "Koden gjeder for en annen termin enn du er registert på. Kanskje underviseren har valgt feil termin?"
+                    : `Denne økten er for ${sessLabel}. Du er i ${userLabel}. Du kan bare registrere oppmøte for din egen termin.`;
+                setStatus("error");
+                setStatusMessage(msg);
+                setCode("");
+                setScanning(false);
+                setLoading(false);
+                return;
+            }
 
             const attRef = doc(
                 db,
@@ -281,6 +331,7 @@ function StudentPage({user}: StudentPageProps) {
 
                 const attendedMap = new Map<string, number>();
                 const attendedByTime: Record<string, boolean> = {};
+                const attendedAtByTime: Record<string, Timestamp | undefined> = {};
                 for (const s of sessions) {
                     if (!s.category) continue;
                     const attRef = doc(
@@ -292,6 +343,7 @@ function StudentPage({user}: StudentPageProps) {
                     );
                     const attSnap = await getDoc(attRef);
                     if (attSnap.exists()) {
+                        const createdAt = (attSnap.data() as any)?.createdAt as Timestamp | undefined;
                         attendedMap.set(
                             s.category,
                             (attendedMap.get(s.category) ?? 0) + 1
@@ -300,12 +352,16 @@ function StudentPage({user}: StudentPageProps) {
                         // Marker spesifikk time som oppmøtt hvis mulig
                         if (s.timeId) {
                             attendedByTime[s.timeId] = true;
+                            attendedAtByTime[s.timeId] = createdAt;
                         } else if (s.name && s.category) {
                             // Fallback når session mangler timeId: prøv å matche på navn og kategori
                             const match = times.find(
                                 (t) => t.category === s.category && t.name === s.name
                             );
-                            if (match) attendedByTime[match.id] = true;
+                            if (match) {
+                                attendedByTime[match.id] = true;
+                                attendedAtByTime[match.id] = createdAt;
+                            }
                         }
                     }
                 }
@@ -340,11 +396,13 @@ function StudentPage({user}: StudentPageProps) {
                 setStats(statsArr);
                 setAllTimes(times);
                 setAttendedByTimeId(attendedByTime);
+                setAttendedAtByTimeId(attendedAtByTime);
             } catch (err) {
                 console.error(err);
                 setStats([]);
                 setAllTimes([]);
                 setAttendedByTimeId({});
+                setAttendedAtByTimeId({});
             } finally {
                 setStatsLoading(false);
             }
@@ -353,35 +411,23 @@ function StudentPage({user}: StudentPageProps) {
         loadStats();
     }, [selectedTerm, user.uid, statsVersion]);
 
-    // Hjelper for sortering av tider i modal: først order, så ledetall i navn, så alfa
+    // Hjelper for sortering av tider i dropdown: først order, så ledetall i navn, så alfa
     const leadingNumber = (name: string): number => {
         const m = name.match(/^\s*(\d+)/);
         return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
     };
 
-    const modalTimes = useMemo(() => {
-        if (!groupModalOpen || !groupModalCategory) return [] as (TimeRow & { attended: boolean })[];
-        const list = allTimes
-            .filter((t) => t.category === groupModalCategory)
-            .map((t) => ({...t, attended: !!attendedByTimeId[t.id]}));
-        list.sort((a, b) => {
-            const ao = (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER);
-            if (ao !== 0) return ao;
-            const na = leadingNumber(a.name);
-            const nb = leadingNumber(b.name);
-            if (na !== nb) return na - nb;
-            return a.name.localeCompare(b.name, "nb-NO", {sensitivity: "base"});
-        });
-        return list;
-    }, [groupModalOpen, groupModalCategory, allTimes, attendedByTimeId]);
-
-    const openGroupModal = (category: string) => {
-        setGroupModalCategory(category);
-        setGroupModalOpen(true);
+    const toggleCategory = (category: string) => {
+        setExpandedCategories((prev) => ({...prev, [category]: !prev[category]}));
     };
-    const closeGroupModal = () => {
-        setGroupModalOpen(false);
-        setGroupModalCategory(null);
+
+    const formatDate = (ts?: Timestamp): string => {
+        if (!ts) return "";
+        try {
+            return new Date(ts.toMillis()).toLocaleDateString("nb-NO");
+        } catch {
+            return "";
+        }
     };
 
 
@@ -392,7 +438,10 @@ function StudentPage({user}: StudentPageProps) {
 
             // Hent krav pr kategori for terminen
             const reqSnap = await getDocs(query(collection(db, "requirements"), where("term", "==", term)));
-            const requirements = reqSnap.docs.map((d) => d.data() as any) as { category: string; requiredCount: number }[];
+            const requirements = reqSnap.docs.map((d) => d.data() as any) as {
+                category: string;
+                requiredCount: number
+            }[];
 
             if (!requirements.length) return; // Ingen krav definert → ingen aksept å registrere
 
@@ -400,7 +449,7 @@ function StudentPage({user}: StudentPageProps) {
             const sessSnap = await getDocs(query(collection(db, "sessions"), where("term", "==", term)));
             const sessions: { id: string; category?: string }[] = sessSnap.docs.map((d) => {
                 const data = d.data() as any;
-                return { id: d.id, category: typeof data?.category === "string" ? data.category : undefined };
+                return {id: d.id, category: typeof data?.category === "string" ? data.category : undefined};
             });
 
             // Tell opp oppmøte per kategori
@@ -474,6 +523,24 @@ function StudentPage({user}: StudentPageProps) {
         }
     };
 
+    const handleGapLife = async () => {
+        const nextTerm = 99;
+        try {
+            await updateDoc(doc(db, "users", user.uid), {
+                term: nextTerm,
+                approvedCurrentTerm: false,
+            });
+        } catch (e) {
+            console.warn("Kunne ikke oppdatere bruker ved semesterbytte:", e);
+        } finally {
+            // Oppdater UI lokalt uansett, for umiddelbar feedback
+            setSelectedTerm(nextTerm);
+            setApprovedCurrentTerm(false);
+            // Trigger ny innlasting av statistikk for ny termin
+            setStatsVersion((v) => v + 1);
+        }
+    }
+
     // Manuell kodeinput (fra OTP-komponenten) → auto når 6 siffer
     const handleCodeChange = (nextValue: string) => {
         const raw = (nextValue || "").replace(/\D/g, "");
@@ -498,15 +565,14 @@ function StudentPage({user}: StudentPageProps) {
 
     return (
         <>
-                <div className="card student-card student-card-top round-corner-top-f">
-                    <div className="studentInfo">
-                        <h2>{user.displayName || user.email}</h2>
-                        <p className="thinFont smallText opaqueFont">{labelFromTerm(termOptions, selectedTerm)}</p>
+                <div className="card student-card card-top round-corner-top100">
+                    <div className="userInfo">
+                        <h2 className="whiteTxt">{user.displayName || user.email}</h2>
+                        <p className="thinFont opaqueFont whiteTxt">{labelFromTerm(termOptions, selectedTerm)}</p>
                     </div>
                     <img src="/card-man.svg" alt="Student-profile-placeholder"/>
                 </div>
-                <div className="card student-card student-card-bottom round-corner-bottom-f">
-
+                <div className="card student-card card-bottom full-border round-corner-bottom100 ">
 
                     {status === "success" ? (
                         <>
@@ -531,8 +597,7 @@ function StudentPage({user}: StudentPageProps) {
                                 <h3 className="">
                                     Kunne ikke registrere oppmøte
                                 </h3>
-                                <p className="">Fant ingen gruppetimer med denne koden. Sjekk at økten er åpen hos lærer.
-                                </p>
+                                <p className="">{statusMessage ?? "Fant ingen gruppetimer med denne koden. Sjekk at økten er åpen hos underviseren."}</p>
                             </div>
                         </>
                     ) : (
@@ -540,7 +605,7 @@ function StudentPage({user}: StudentPageProps) {
                             {/* STANDARD TILSTAND */}
                             <div className="code-input-container">
                                 <p className="spacedFont thinFont">
-                                    Oppmøtekode fra lærer
+                                    Oppmøtekode fra underviser
                                 </p>
                                 <OtpInput
                                     value={code}
@@ -550,15 +615,13 @@ function StudentPage({user}: StudentPageProps) {
                             </div>
 
                             <img src="/qrscan.svg" alt="QR-code-icon" className="qr-code-icon"/>
-
-                            <br/>
-
+                            <br />
                             <button
                                 type="button"
                                 onClick={() => setScanning(true)}
-                                className="button-colorless fontUnderline boldFont QRbutton"
+                                className="button-colorless fontUnderline boldFont qr-code-button"
                             >
-                                Skann QR-kode
+                                Scan QR-kode
                             </button>
 
                             {scanning && (
@@ -627,193 +690,135 @@ function StudentPage({user}: StudentPageProps) {
                             )}
                         </>
                     )}
-
-
-                </div>
-            {approvedCurrentTerm && (
-                <div className="card round-corners-whole-f approved-term-card attendance-approved">
-                    <h2>Godkjent</h2>
-                    <p className="thinFont opaqueFont">
-                        Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd. Lykke
-                        til på eksamen!
-                    </p>
-                    <button
-                        className="btn button-primary button-black button-next-semester"
-                        onClick={handleStartNextSemester}
-                    >
-                        Start neste semester
-                    </button>
-                    <button className="button-primary button-colorless fontUnderline">Har innvilget permisjon</button>
-                </div>
-            )}
-            <div className="card round-corners-whole-f student-overview-card">
-
-                {inactive && (
-                    <p className="text-red text-center">
-                        Du er markert som "{user.semesterStatus}" dette semesteret. Ingen
-                        oppmøtekrav, men du kan fortsatt registrere oppmøte.
-                    </p>
-                )}
-
-                {/* Øvre del: statuskort eller kode/QR */}
-
-                <section>
-                    {statsLoading ? (
-                        <LoadingSpinner/>
-                    ) : stats.length === 0 ? (
-                        <p className="fs-0_9 text-gray-500">
-                            Ingen registrerte timer for denne terminen ennå.
+            </div>
+                {approvedCurrentTerm && (
+                    <div className="card approved-term-card full-border round-corners-whole100 ">
+                        <h2 className="boldFont">Godkjent</h2>
+                        <p className="thinFont opaqueFont">
+                            Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er oppnådd.
+                            Lykke
+                            til på eksamen!
                         </p>
-                    ) : (
-                        <>
-                            <h2>Min oppmøtebok</h2>
-                            <p className="thinFont opaqueFont">Her finner du alle fullførte<br/> og fremtidige oppmøter.
-                            </p>
-                            <table className="table-container">
-                                <tbody>
-                                {stats.map((s) => {
-                                    const metRequirement =
-                                        s.requiredCount != null &&
-                                        s.attendedCount >= s.requiredCount;
-
-                                    return (
-                                        <tr
-                                            key={s.category}
-                                            onClick={() => openGroupModal(s.category)}
-                                        >
-                                            <td className="requirement-meet-icon">
-                                                {metRequirement ? (
-                                                    <img src="/check-white.svg" alt="Checkmark-icon"/>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                            </td>
-                                            <td className="class-overview thinFont smal">
-                                                {s.category}
-                                            </td>
-                                            <td className="spacedFont">
-                                                {s.totalSessions > 0
-                                                    ? `${s.attendedCount}/${s.totalSessions}`
-                                                    : s.attendedCount}
-                                            </td>
-                                            <td className="required-classes">
-                                                {s.requiredCount ?? "-"}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                </tbody>
-                            </table>
-                            {approvedCurrentTerm && (
-                                <>
-                                    <h2 className="attendance-approved">Godkjent</h2>
-                                    <p className="thinFont opaqueFont attendance-approved">
-                                        Bra jobba! Kravene for {labelFromTerm(termOptions, selectedTerm).toLowerCase()} er
-                                        oppnådd. Lykke til på eksamen!
-                                    </p>
-                                </>
-                            )}
-                        </>
-                    )}
-                </section>
-
-                {/* Modal: detaljer for valgt gruppe */}
-                {groupModalOpen && (
-                    <div
-                        style={{
-                            position: "fixed",
-                            inset: 0,
-                            backgroundColor: "rgba(15,23,42,0.35)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            zIndex: 50,
-                        }}
-                        onClick={closeGroupModal}
-                    >
-                        <div
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                                width: "100%",
-                                maxWidth: "420px",
-                                backgroundColor: "#ffffff",
-                                borderRadius: "1rem",
-                                padding: "1rem 1.25rem",
-                                boxShadow: "0 20px 40px rgba(15,23,42,0.25)",
-                            }}
+                        <button
+                            id="start-next-semester-button"
+                            className="button button-black button-fullwidth field-height-100 round-corners-whole50"
+                            onClick={handleStartNextSemester}
                         >
-                            <div style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center"
-                            }}>
-                                <h3 style={{margin: 0}}>
-                                    {groupModalCategory ? `Oppmøte i ${groupModalCategory}` : "Oppmøte"}
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={closeGroupModal}
-                                    style={{
-                                        border: "none",
-                                        background: "transparent",
-                                        fontSize: "1.2rem",
-                                        cursor: "pointer",
-                                    }}
-                                    aria-label="Lukk"
-                                    title="Lukk"
-                                >
-                                    ×
-                                </button>
-                            </div>
-
-                            {modalTimes.length === 0 ? (
-                                <p style={{fontSize: "0.9rem", color: "#6b7280"}}>
-                                    Ingen timer er definert i denne gruppen enda.
-                                </p>
-                            ) : (
-                                <ul style={{listStyle: "none", padding: 0, marginTop: "0.75rem"}}>
-                                    {modalTimes.map((t) => (
-                                        <li
-                                            key={t.id}
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "space-between",
-                                                padding: "0.35rem 0",
-                                                borderBottom: "1px solid #f3f4f6",
-                                            }}
-                                        >
-                                            <span>{t.name}</span>
-                                            <span className="button-small button-thin button-black"
-                                            >
-                                            {t.attended ? "Registrert" : "Mangler"}
-                                        </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-
-                            <div style={{display: "flex", justifyContent: "flex-end", marginTop: "0.75rem"}}>
-                                <button
-                                    type="button"
-                                    onClick={closeGroupModal}
-                                    style={{
-                                        padding: "0.35rem 0.8rem",
-                                        borderRadius: "999px",
-                                        border: "1px solid #d1d5db",
-                                        background: "#fff",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Lukk
-                                </button>
-                            </div>
-                        </div>
+                            Start neste semester
+                        </button>
+                        <button
+                           id = "gap-life-button"
+                            className="button button-colorless fontUnderline boldFont"
+                           onClick={handleGapLife}
+                        >Har innvilget permisjon
+                        </button>
                     </div>
                 )}
-            </div>
-        </>
-    );
-}
+                <div className="card round-corners-whole100 student-overview-card">
+                    {inactive && (
+                        <p className="text-red text-center">
+                            Du er markert som "{user.semesterStatus}" dette semesteret. Ingen
+                            oppmøtekrav, men du kan fortsatt registrere oppmøte.
+                        </p>
+                    )}
+
+                    {/* Øvre del: statuskort eller kode/QR */}
+
+                    <section>
+                        {statsLoading ? (
+                            <LoadingSpinner/>
+                        ) : stats.length === 0 ? (
+                            <p className="fs-0_9 text-gray-500">
+                                Ingen registrerte timer for denne terminen ennå.
+                            </p>
+                        ) : (
+                            <>
+                                <h2>Min oppmøtebok</h2>
+                                <p className="thinFont opaqueFont">Her finner du alle fullførte og fremtidige
+                                    oppmøter.
+                                </p>
+                                <table className="table-container">
+                                    <tbody>
+                                    {stats.map((s) => {
+                                        const metRequirement =
+                                            s.requiredCount != null &&
+                                            s.attendedCount >= s.requiredCount;
+
+                                        return (
+                                            <React.Fragment key={s.category}>
+                                                <tr
+                                                    onClick={() => toggleCategory(s.category)}
+                                                >
+                                                    <td className="requirement-meet-icon">
+                                                        {metRequirement ? (
+                                                            <img src="/check-white.svg" alt="Checkmark-icon"/>
+                                                        ) : (
+                                                            <></>
+                                                        )}
+                                                    </td>
+                                                    <td className="class-overview thinFont smal">
+                                                        {s.category}
+                                                    </td>
+                                                    <td className="spacedFont">
+                                                        {s.totalSessions > 0
+                                                            ? `${s.attendedCount}/${s.totalSessions}`
+                                                            : s.attendedCount}
+                                                    </td>
+                                                    <td className="required-classes">
+                                                        {s.requiredCount ?? "-"}
+                                                    </td>
+                                                </tr>
+                                                {expandedCategories[s.category] && (
+                                                    // Dropdown-detaljer per time i kategorien
+                                                    <tr>
+                                                        <td colSpan={4} className="detail-cell">
+                                                            <div className="subtable-wrapper">
+                                                                <table className="subtable">
+                                                                    <tbody>
+                                                                    {allTimes
+                                                                        .filter((t) => t.category === s.category)
+                                                                        .sort((a, b) => {
+                                                                            const ao = (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER);
+                                                                            if (ao !== 0) return ao;
+                                                                            const na = leadingNumber(a.name);
+                                                                            const nb = leadingNumber(b.name);
+                                                                            if (na !== nb) return na - nb;
+                                                                            return a.name.localeCompare(b.name, "nb-NO", {sensitivity: "base"});
+                                                                        })
+                                                                        .map((t) => {
+                                                                            const attended = !!attendedByTimeId[t.id];
+                                                                            const attendedAt = attendedAtByTimeId[t.id];
+                                                                            return (
+                                                                                <tr key={`detail-${s.category}-${t.id}`}>
+                                                                                    <td className="subtable-icon-cell">
+                                                                                        {attended ? (
+                                                                                            <img src="/check-white.svg" alt="Checkmark-icon"/>
+                                                                                        ) : (
+                                                                                            <></>
+                                                                                        )}
+                                                                                    </td>
+                                                                                    <td className="class-overview thinFont smal subtable-name-cell">{t.name}</td>
+                                                                                    <td className="smallText opaqueFont subtable-date-cell">{attended ? formatDate(attendedAt) : ""}</td>
+                                                                                </tr>
+                                                                            );
+                                                                        })}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                    </tbody>
+                                </table>
+                            </>
+                        )}
+                    </section>
+                </div>
+            </>
+            );
+            }
 
 export default StudentPage;

@@ -33,3 +33,11 @@
     width: 1px !important;
 }
 
+/* CUSTOM FOR OPPMØTEBOKA */
+/* GENERAL */
+#main {
+    min-height: 100vh;
+    text-align: center;
+}
+
+#main, header {margin: 2rem 1.5rem 0 1.5rem;}

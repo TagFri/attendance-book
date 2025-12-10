@@ -10,6 +10,7 @@ import "./styles/5footer.css";
 import "./styles/6sablaflott.css";
 import "./styles/7restCss.css";
 import "./styles/8header.css";
+import "./styles/9admin.css";
 // Page-specific styles (must be last)
 import "./index.css"; // Load global styles, including focus outlines for inputs/selects
 import { Toaster } from "sonner";

@@ -115,12 +115,15 @@ function App() {
                         <div id="loginMan">
                             <img src="/login-man.svg" alt="Logo" className=""/>
                         </div>
-                        <div className="card round-corners-whole-f login-card">
-                            <h1>Velkommen tilbake</h1>
+                        <div
+                            id="login-card"
+                            className="card round-corners-whole100 full-border"
+                             >
+                            <h1 className="boldFont">Velkommen tilbake</h1>
                             <form onSubmit={handleSubmit}>
                                 <div className="input-group">
-                                    <label className="input-label">Mobil / epost</label>
-                                    <input className="input-field round-corners-whole-h"
+                                    <label className="input-label thinFont">Mobil / epost</label>
+                                    <input className="input-field round-corners-whole50 field-height-100"
                                            type="email"
                                            value={email}
                                            onChange={(e) => setEmail(e.target.value)}
@@ -135,8 +138,8 @@ function App() {
                                     />
                                 </div>
                                 <div className="input-group">
-                                    <label className="input-label">Passord</label>
-                                    <input className="input-field round-corners-whole-h"
+                                    <label className="input-label thinFont">Passord</label>
+                                    <input className="input-field round-corners-whole50 field-height-100"
                                            type="password"
                                            value={password}
                                            onChange={(e) => setPassword(e.target.value)}
@@ -148,7 +151,7 @@ function App() {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="button-primary button-black round-corners-whole-h"
+                                    className="button button-fullwidth field-height-100 round-corners-whole50 button-black boldFont"
                                 >
                                     {submitting ? "Logger inn..." : "Logg inn"}
                                 </button>
@@ -156,7 +159,7 @@ function App() {
                                     type="button"
                                     onClick={handleForgotPassword}
                                     disabled={sendingReset}
-                                    className="button-colorless boldFont"
+                                    className="button button-colorless boldFont fontUnderline"
                                 >
                                     {sendingReset ? "Sender e‑post..." : "Glemt passord"}
                                 </button>
@@ -180,7 +183,7 @@ function App() {
         <>
             {/* Center page content until it grows tall; leave slim top/side background */}
             <Header user={user}></Header>
-            <div id="main">
+            <div id="main" className={`${user.role === "admin" ? "admin" : ""}`}>
                 {user.role === "admin" ? (
                     <AdminPage user={user}/>
                 ) : user.role === "teacher" ? (

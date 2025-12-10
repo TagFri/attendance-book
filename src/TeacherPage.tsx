@@ -70,7 +70,6 @@ type RecentTime = {
     category: string;
     term: number;
     lastAt?: Timestamp;
-    createdAt?: Timestamp;
 };
 
 function TeacherPage({ user }: TeacherPageProps) {
@@ -609,15 +608,16 @@ function TeacherPage({ user }: TeacherPageProps) {
 
     return (
         <>
-                <div className="card teacher-card round-corners-whole-f">
-                <h2>
+                <div className="card teacher-card full-border round-corners-whole100">
+                <h2 className="boldFont">
                     Finn timen din
                 </h2>
 
                 {/* Termin øverst, time under */}
                 <section style={{
                     marginTop: "1rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <div style={{
+                    <div
+                        style={{
                         marginBottom: "1.25rem", width: "100%", maxWidth: 520 }}>
                         {(() => {
                             // Bygg liste over valgbare terminer
@@ -649,7 +649,8 @@ function TeacherPage({ user }: TeacherPageProps) {
                             }
 
                             return (
-                                <div style={{
+                                <div
+                                    style={{
                                     display: "flex",
                                     gap: "0.5rem",
                                     flexWrap: "wrap",
@@ -671,7 +672,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                                                     searchInputRef.current?.focus();
                                                 }, 0);
                                             }}
-                                            className={`button-small button-colorless button-border ${selectedTerm === opt.value ? 'button-yellow' : 'button-opacity'}`}
+                                            className={`button button-small button-colorless round-corners-whole25 thin-border ${selectedTerm === opt.value ? 'button-yellow boldFont' : 'button-opacity'}`}
                                             ref={(el) => {
                                                 // Auto-select first button when rendered
                                                 if (el && opt === options[0] && selectedTerm === null) {
@@ -700,7 +701,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                             }}
                             placeholder={selectedTerm ? "Skriv navnet på timen" : "Velg modul først"}
                             disabled={!selectedTerm}
-                            className="input-field input-full"
+                            className="input-full field-height-100"
                         />
 
                         {/* Dropdown-forslag under input */}
@@ -772,7 +773,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                                 >
                                     <QRCodeCanvas
                                         value={activeSession.code}
-                                        size={160}
+                                        size={140}
                                     />
                                     <div
                                         style={{
@@ -832,9 +833,14 @@ function TeacherPage({ user }: TeacherPageProps) {
                                 </button>
                             </div>
 
-                            <hr style={{ margin: "1rem 0" }} />
+                            <hr style={{
+                                margin: "2rem 0",
+                                borderWidth: "1.25px",
+                                borderStyle: "solid",
+                                borderColor: "var(--color-black)"
+                            }} />
 
-                            <h4>{attendees.length} registrerte studenter</h4>
+                            <h4>{attendees.length} {attendees.length === 1 ? ("registert student") : ("registrerte studenter")}</h4>
                             {attendees.length === 0 ? (
                                 <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
                                     Ingen har registrert seg ennå.
@@ -842,6 +848,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                             ) : (
                                 <table
                                     style={{ width: "100%", borderCollapse: "collapse" }}
+                                    className="table-container"
                                 >
                                     <tbody>
                                     {attendees.map((a) => (
@@ -850,55 +857,11 @@ function TeacherPage({ user }: TeacherPageProps) {
                                                 style={{
                                                     padding: "0.3rem",
                                                     borderBottom: "1px solid #f3f4f6",
+                                                    textAlign: "left",
                                                 }}
+                                                onClick={() => handleRemoveAttendee(a)}
                                             >
                                                 {a.studentName || "-"}
-                                            </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.3rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                }}
-                                            >
-                                                {a.studentEmail?.split("@")[0]|| "-"}
-                                            </td>
-                                            <td
-                                                style={{
-                                                    padding: "0.3rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                    textAlign: "right",
-                                                }}
-                                            >
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveAttendee(a)}
-                                                    aria-label="Fjern student fra økten"
-                                                    title="Fjern student"
-                                                    style={{
-                                                        background: "transparent",
-                                                        border: "none",
-                                                        cursor: "pointer",
-                                                        color: "#b91c1c",
-                                                        padding: "0.15rem",
-                                                    }}
-                                                >
-                                                    {/* liten rødt kryss ikon */}
-                                                    <svg
-                                                        xmlns="http://www.w3.org/2000/svg"
-                                                        width="16"
-                                                        height="16"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="2"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        aria-hidden
-                                                    >
-                                                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                                                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                                                    </svg>
-                                                </button>
                                             </td>
                                         </tr>
                                     ))}
@@ -911,10 +874,10 @@ function TeacherPage({ user }: TeacherPageProps) {
 
                     {/* Nylig registrerte timer (kun når ingen aktiv økt) */}
                     { recentTimes.length > 0 && (
-                        <div className="card round-corners-whole-f teacher-recent-sessions">
+                        <div className="card round-corners-whole100 teacher-recent-sessions">
                             <div>
                                 <h2>Nylige timer</h2>
-                                <p>Her finner du alle timer registert siste 4 timene.</p>
+                                <p className="thinFont opaqueFont">Her finner du de andre gruppetimene du har hatt siste 4 timene</p>
                                 <table className="table-container">
                                     <tbody>
                                     {recentTimes.map((it) => (
@@ -922,17 +885,11 @@ function TeacherPage({ user }: TeacherPageProps) {
                                             <td>
                                                 <p> {it.name}
                                                 </p>
-                                                <p className="thinFont opaqueFont">
-                                                    Kl: {it.createdAt ? new Date(it.createdAt.toDate()).toLocaleTimeString('nb-NO', {
-                                                        hour: '2-digit',
-                                                        minute: '2-digit'
-                                                    }) : '-'}
-                                                    {termLabel(it.term)}
-                                                </p>
+                                                <p className="thinFont opaqueFont">{termLabel(it.term)}</p>
                                             </td>
                                             <td>
                                                 <button
-                                                    className="button-small button-white boldFont"
+                                                    className="button button-small button-white round-corners-whole10"
                                                     type="button"
                                                     onClick={() => void handleOpenRecent(it)}
                                                 >

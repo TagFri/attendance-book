@@ -1,0 +1,9 @@
+.admin-page {
+    width: 100%;
+    text-align: left;
+}
+
+#main.admin {
+    max-width: 1000px;
+    margin: 0 auto;
+}

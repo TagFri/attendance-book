@@ -1,18 +1,12 @@
 /* MAIN BACKGROUND COLOUR */
 body {background-color: var(--color-background);}
-
-/* DARK MODE */
-body {transition: background-color 0.3s, color 0.3s;}
+/* DARK MODE */  body {transition: background-color 0.3s, color 0.3s;}
 
 /*------BUTTONS------- */
-/*-------------------- */
-.btn {
-    /* Style */
-    border-radius: 1rem;
-    border: none;
-    text-decoration: none;
+/* Standard button */
+.button {
     text-align: center;
-    padding: 0 5%;
+    font-style: normal;
 
     /* Interactivity */
     cursor: pointer;
@@ -21,9 +15,42 @@ body {transition: background-color 0.3s, color 0.3s;}
     -webkit-appearance: none;
     -moz-appearance: none;
 }
+/* Button width */
+.button-fullwidth {width: 100%;}
+.button-small {
+    text-align: center;
+    padding: 0.5rem 1rem;}
+/* Button colors */
+.button-colorless {
+    background-color: transparent;}
+.button-black {
+    background-color: var(--color-black);
+    color: var(--color-white);
+    border-color: var(--color-black) !important;
+}
+.button-white {
+    background-color: var(--color-white);
+    border-color: var(--color-white);
+    color: var(--color-black) !important;
+}
+/* Button opacity */
+.button-opacity {opacity: 0.5;}
+
+/* --------- CARD -------*/
+/* CARD STYLING */
+.card {
+    width: 100%;
+    max-width: 500px;
+    padding: 1.5rem 2rem;
+}
+.round-corners-whole100 {border-radius: 2rem;}
+.round-corners-whole50 {border-radius: 1rem;}
+.round-corners-whole25 {border-radius: 0.75rem;}
+.round-corners-whole10 {border-radius: 0.5rem;}
+.round-corner-bottom100 {border-radius: 0 0 2rem 2rem;}
+.round-corner-top100 {border-radius: 2rem 2rem 0 0;}
 
 /*----- LINKS -------- */
-/*-------------------- */
 .link, .link:hover, .link:visited,
 a, a:hover, a:visited {     color: var(--color-link);}
 a, .link:hover, a:hover {   text-decoration: none;}
@@ -32,76 +59,34 @@ a, .link:hover, a:hover {   text-decoration: none;}
     text-decoration: underline;
     padding-left: 0;
 }
-
-/*
-- INPUT + SELECT
-*/
+/*----- INPUTS ------*/
 input, select {
     padding: 0.5rem 0.75rem;
     border-radius: 1rem;
-    border: 0.07rem solid var(--color-input-borderline);
     cursor: pointer;
 }
 
-/*
-- INPUT
-*/
+.input-label {
+    margin-left: 0.8rem;
+    margin-bottom: 0.4rem;
+}
+
 /*-> FOCUS */
 input:focus, select:focus {
-    outline: 0.1rem solid var(--color-primary-medium);
-    outline-offset: -0.075rem;
-}
-/*-> INVALID */
-.invalid-input {
-    outline: 0.1rem solid var(--color-red);
+    outline: 0.1rem solid var(--color-black);
     outline-offset: -0.075rem;
 }
 
-/*
-- SELECT
-/* Removes standard arrow and colours*/
-.custom-select select {
-    appearance: none;
-    background-color: var(--color-input-field);
-    color: var(--color-font);
-}
-/* Hover colours */
-.custom-select select:hover {
-}
+/* Borders */
+.thin-border {border: solid 0.1rem;}
+.full-border {border: solid 0.2rem;}
 
-/* Add arrow */
-.custom-select {
-    position: relative;
-}
-.custom-select::before,
-.custom-select::after {
-    --size: 0.3rem;
-    position: absolute;
-    content: "";
-    right: 1rem;
-    pointer-events: none; /* Avoid event on pointer */
-}
+/* CUSTOM FOR OPPMØTEBOKA */
+.button-yellow {
+    background-color: var(--color-yellow-l);
+    border-color: var(--color-yellow-l) !important;
+    color: var(--color-black); }
+.field-height-100 {height: 3.9rem;}
+.field-height-50 {height: 3rem;}
 
-/* ADD COURSER DOWN */
-.custom-select::after {
-    /* Arrow created with borders*/
-    border-left: var(--size) solid transparent;
-    border-right: var(--size) solid transparent;
-    border-top: var(--size) solid var(--color-font);
-    top: 45%; /* 55% if both are in use*/
-}
 
-/* DATEPICKER */
-input[type="date"]{
-    background-color: var(--color-input-background);
-    color: var(--color-font);
-}
-::-webkit-calendar-picker-indicator{
-    background-color: var(--color-input-background);
-    color: var(--color-font);
-    cursor: pointer;
-}
-
-.hidden {
-    display: none;
-}
