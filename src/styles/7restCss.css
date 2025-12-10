@@ -5,14 +5,32 @@
     margin-bottom: 35px;
 }
 
-.input-full {
+.input100 {
     width: 100%;
 }
-.input-half {
+.input50 {
     width: 50%;
+}
+.input40 {
+    width: 40%;
+}
+.input20 {
+    width: 20%;
 }
 
 /* LOGIN PAGE */
+
+#login-card {
+    margin-top: 0;
+    width: 100% !important;
+}
+
+.login-card-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
 
 #loginMan {
     margin: 0 auto;
@@ -104,9 +122,8 @@
         color: var(--color-white);
     }
 
-
     .table-container {
-        margin-top: 3rem;
+        margin-top: 2rem;
         width: 100%;
         text-align: left;
         /* width for first column (status/check icon) to help align nested detail rows */
@@ -114,8 +131,11 @@
 
         tr {
             border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-            height: 2rem;
+            height: 3.5rem;
             justify-self: center;
+        }
+        .main-table-overview-row:hover {
+            background-color: rgba(255, 255, 255, 0.05);
         }
 
         /* remove underline on the very last row of the main table */
@@ -142,6 +162,7 @@
         .required-classes {
             text-align: center;
             padding-right: 1rem;
+        }
         }
 
         /* Detail (subtable) styles */
@@ -274,5 +295,43 @@
     color: #6b7280; /* gray-500 */
 }
 
+.admin-filter-section {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    margin: 1rem 0 2rem;
+}
 
+.admin-page input[type="checkbox"] {
+    accent-color: var(--color-black);
+}
+
+.admin-table {
+    td:nth-child(1), th:nth-child(1) {
+        text-align: left;
+        width: 50%;
+    }
+    td:nth-child(2), th:nth-child(2) {
+        text-align: center;
+        width: 30%
+    }
+    td:nth-child(3), th:nth-child(3) {
+        text-align: center;
+        width: 20%;
+    }
+
+    tr:last-child td {
+        border-bottom: none;
+    }
+
+    tr th {
+        border-bottom: none;
+    }
+
+    tr td {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+
+}
 

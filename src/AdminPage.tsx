@@ -1046,7 +1046,7 @@ const UsersAdmin: React.FC = () => {
     // ---------- RENDER ----------
 
     return (
-        <div className="">
+        <div className="admin-page">
             {/* Faner */}
             <div className="filter-buttons">
                 <button
@@ -1092,7 +1092,7 @@ const UsersAdmin: React.FC = () => {
                         : "Administorerer"}
             </h2>
             {/* Globalt søk */}
-            <div className="flex-row-center">
+            <div className="admin-filter-section">
                 <input
                     type="text"
                     placeholder={
@@ -1104,8 +1104,42 @@ const UsersAdmin: React.FC = () => {
                     }
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="input-half field-height-50 thin-border round-corners-whole25"
+                    className="input40 field-height-50 thin-border round-corners-whole25"
                 />
+                <select
+                    className="input20 field-height-50 thin-border round-corners-whole25"
+                    value={
+                        (activeTab === "teachers"
+                            ? teacherTermFilter
+                            : activeTab === "students"
+                                ? studentTermFilter
+                                : adminTermFilter) === "all"
+                            ? ""
+                            : (activeTab === "teachers"
+                                ? teacherTermFilter
+                                : activeTab === "students"
+                                    ? studentTermFilter
+                                    : adminTermFilter)
+                    }
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        const parsed: number | "all" = val === "" ? "all" : parseInt(val, 10);
+                        if (activeTab === "teachers") {
+                            setTeacherTermFilter(parsed);
+                        } else if (activeTab === "students") {
+                            setStudentTermFilter(parsed);
+                        } else {
+                            setAdminTermFilter(parsed);
+                        }
+                    }}
+                >
+                    <option value="">Alle terminer</option>
+                    {(activeTab === "admins" ? computedTermOptions : allowedTermOptions).map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
                 <button
                     type="button"
                     onClick={
@@ -1133,59 +1167,20 @@ const UsersAdmin: React.FC = () => {
                 <>
                     {/* LÆRERE */}
                     {activeTab === "teachers" && (
-                        <div style={{marginBottom: "1.2rem"}}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    justifyContent: "space-between",
-                                    gap: "0.5rem",
-                                    marginBottom: "0.4rem",
-                                }}
-                            >
-                                <div style={{fontSize: "0.8rem"}}>
-                                    <label>
-                                        <select
-                                            value={teacherTermFilter === "all" ? "" : teacherTermFilter}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                setTeacherTermFilter(
-                                                    val === "" ? "all" : parseInt(val, 10)
-                                                );
-                                            }}
-                                            style={{
-                                                padding: "0.2rem 0.4rem",
-                                                borderRadius: "0.5rem",
-                                                border: "1px solid #d1d5db",
-                                                fontSize: "0.8rem",
-                                            }}
-                                        >
-                                            <option value="">Alle terminer</option>
-                                            {allowedTermOptions.map((opt) => (
-                                                <option key={opt.value} value={opt.value}>
-                                                    {opt.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                </div>
-                            </div>
-
+                        <div>
                             <table className="admin-table">
                                 <thead>
                                 <tr>
-                                    <th>Navn</th>
-                                    <th>E-post</th>
-                                    <th>Mobil</th>
+                                    <th><h2>Navn</h2></th>
+                                    <th><h2>E-post</h2></th>
+                                    <th><h2>Mobil</h2></th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 {teachers.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={3} className="admin-table__empty">
+                                        <p>
                                             Ingen lærere funnet.
-                                        </td>
-                                    </tr>
+                                        </p>
                                 ) : (
                                     teachers.map((u) => (
                                         <tr
@@ -1212,57 +1207,19 @@ const UsersAdmin: React.FC = () => {
 
                     {/* STUDENTER */}
                     {activeTab === "students" && (
-                        <div style={{marginBottom: "1.2rem"}}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    justifyContent: "space-between",
-                                    gap: "0.5rem",
-                                    marginBottom: "0.4rem",
-                                }}
-                            >
-                                <div style={{fontSize: "0.8rem"}}>
-                                    <label>
-                                        <select
-                                            value={studentTermFilter === "all" ? "" : studentTermFilter}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                setStudentTermFilter(
-                                                    val === "" ? "all" : parseInt(val, 10)
-                                                );
-                                            }}
-                                            style={{
-                                                padding: "0.2rem 0.4rem",
-                                                borderRadius: "0.5rem",
-                                                border: "1px solid #d1d5db",
-                                                fontSize: "0.8rem",
-                                            }}
-                                        >
-                                            <option value="">Alle terminer</option>
-                                            {allowedTermOptions.map((opt) => (
-                                                <option key={opt.value} value={opt.value}>
-                                                    {opt.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                </div>
-
-
-                            </div>
+                        <div>
 
                             {students.length === 0 ? (
-                                <p style={{fontSize: "0.85rem", color: "#6b7280"}}>
+                                <p>
                                     Ingen studenter funnet.
                                 </p>
                             ) : (
                                 <table className="admin-table">
                                     <thead>
                                     <tr>
-                                        <th>Navn</th>
-                                        <th>Termin</th>
-                                        <th>Status</th>
+                                        <th><h2>Navn</h2></th>
+                                        <th><h2>Termin</h2></th>
+                                        <th><h2>Status</h2></th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -1305,55 +1262,18 @@ const UsersAdmin: React.FC = () => {
 
                     {/* ADMINS */}
                     {activeTab === "admins" && (
-                        <div style={{marginBottom: "1.2rem"}}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    justifyContent: "space-between",
-                                    gap: "0.5rem",
-                                    marginBottom: "0.4rem",
-                                }}
-                            >
-                                <div style={{fontSize: "0.8rem"}}>
-                                    <label>
-                                        <select
-                                            value={adminTermFilter === "all" ? "" : adminTermFilter}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                setAdminTermFilter(
-                                                    val === "" ? "all" : parseInt(val, 10)
-                                                );
-                                            }}
-                                            style={{
-                                                padding: "0.2rem 0.4rem",
-                                                borderRadius: "0.5rem",
-                                                border: "1px solid #d1d5db",
-                                                fontSize: "0.8rem",
-                                            }}
-                                        >
-                                            <option value="">Alle terminer</option>
-                                            {computedTermOptions.map((opt) => (
-                                                <option key={opt.value} value={opt.value}>
-                                                    {opt.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                </div>
-                            </div>
-
+                        <div>
                             {admins.length === 0 ? (
-                                <p style={{fontSize: "0.85rem", color: "#6b7280"}}>
+                                <p>
                                     Ingen administratorer funnet.
                                 </p>
                             ) : (
                                 <table className="admin-table">
                                     <thead>
                                     <tr>
-                                        <th>Navn</th>
-                                        <th>E-post</th>
-                                        <th>Mobil</th>
+                                        <th><h2>Navn</h2></th>
+                                        <th><h2>E-post</h2></th>
+                                        <th><h2>Mobil</h2></th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -1519,7 +1439,7 @@ const UsersAdmin: React.FC = () => {
                                             }}
                                         >
                                             <input
-                                                type="checkbox"
+                                                type={"checkbox"}
                                                 checked={editTeacherAllowedTerms.includes(opt.value)}
                                                 onChange={() =>
                                                     toggleAllowedTermInTeacherModal(opt.value)
@@ -3001,22 +2921,9 @@ const TermSetup: React.FC = () => {
 
     return (
         <>
-            <section style={{marginBottom: "2rem"}}>
-                {/* Toppkontroller: Termin (øverst), deretter Ny gruppe + Legg til gruppe under (desktop og mobil) */}
-                <div
-                    style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.5rem",
-                        marginBottom: "0.75rem",
-                    }}
-                >
-                    <div className="admin-books-controls"
-                         style={{display: "flex", gap: "0.5rem", alignItems: "center"}}>
-                        <div
-                            className={`admin-books-rest${isSuperAdmin ? " admin-books-rest--split" : ""}`}
-                            style={{display: "flex", gap: "0.5rem", flex: 1, minWidth: 0}}
-                        >
+            <section>
+                    <div className="admin-books-controls">
+                        <div className={`admin-books-rest${isSuperAdmin ? " admin-books-rest--split" : ""}`}>
                             {isEditingTermLabel && isSuperAdmin ? (
                                 <input
                                     className="admin-books-select"
@@ -3043,48 +2950,58 @@ const TermSetup: React.FC = () => {
                                     }}
                                 />
                             ) : (
-                                <select
-                                    className="admin-books-select"
-                                    value={selectedTerm}
-                                    onChange={(e) => {
-                                        const v = e.target.value;
-                                        if (v === "__new__") {
-                                            if (hasGate) {
-                                                // Begrenset admin kan ikke opprette nye oppmøtebøker
-                                                return;
-                                            }
-                                            void createNewTerm();
-                                            return;
-                                        }
-                                        setSelectedTerm(v === "" ? "" : parseInt(v, 10));
-                                    }}
+                                <div
+                                    className="filter-buttons"
                                     style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: "0.5rem",
                                         flex: 1,
                                         minWidth: 0,
-                                        padding: "0.35rem 0.5rem",
-                                        borderRadius: "0.5rem",
-                                        border: "1px solid #d1d5db",
-                                        // Full width when no admin actions are shown (non-superadmin)
-                                        width: isSuperAdmin ? undefined : "100%",
                                     }}
                                 >
-                                    <option value="" disabled>
-                                        Velg termin
-                                    </option>
-                                    {(!hasGate
-                                        ? termOptionsWithOverrides
-                                        : termOptionsWithOverrides.filter((opt) => allowedSet?.has(opt.value)))
-                                        .map((opt) => (
-                                            <option key={opt.value} value={opt.value}>
+                                    {(() => {
+                                        const list = !hasGate
+                                            ? termOptionsWithOverrides
+                                            : termOptionsWithOverrides.filter((opt) => allowedSet?.has(opt.value));
+                                        if (list.length === 0) {
+                                            return (
+                                                <span style={{color: "#6b7280", padding: "0.35rem 0"}}>
+                                                    Ingen oppmøtebøker tilgjengelig
+                                                </span>
+                                            );
+                                        }
+                                        return list.map((opt) => (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => setSelectedTerm(opt.value)}
+                                                className={`${
+                                                    selectedTerm === opt.value
+                                                        ? "button button-small button-yellow thin-border round-corners-whole25"
+                                                        : "button button-small button-colorless button-opacity thin-border round-corners-whole25"
+                                                }`}
+                                                title={opt.label}
+                                            >
                                                 {opt.label}
-                                            </option>
-                                        ))}
-                                    {!hasGate && <option value="__new__">+ Ny oppmøtebok</option>}
-                                </select>
+                                            </button>
+                                        ));
+                                    })()}
+                                    {!hasGate && (
+                                        <button
+                                            type="button"
+                                            onClick={() => void createNewTerm()}
+                                            className="button button-small button-colorless boldFont thin-border round-corners-whole25"
+                                            title="Opprett ny oppmøtebok"
+                                        >
+                                            <span>+</span> Ny oppmøtebok
+                                        </button>
+                                    )}
+                                </div>
                             )}
                             {isSuperAdmin && (
                                 <button
-                                    className={"button-green admin-books-action"}
+                                    className={"button button-small"}
                                     type="button"
                                     disabled={selectedTerm === "" && !isEditingTermLabel}
                                     onClick={() => {
@@ -3093,15 +3010,6 @@ const TermSetup: React.FC = () => {
                                         } else {
                                             startInlineRename();
                                         }
-                                    }}
-                                    style={{
-                                        width: "160px",
-                                        padding: "0.45rem 0.9rem",
-                                        cursor:
-                                            selectedTerm === "" && !isEditingTermLabel
-                                                ? "not-allowed"
-                                                : "pointer",
-                                        whiteSpace: "nowrap",
                                     }}
                                 >
                                     {isEditingTermLabel ? "Legg til" : "Endre navn"}
@@ -3116,14 +3024,6 @@ const TermSetup: React.FC = () => {
                                 title="Sorter oppmøtebøker"
                                 disabled={terms.length === 0}
                                 onClick={openTermSort}
-                                style={{
-                                    padding: "0.35rem 0.5rem",
-                                    borderRadius: "0.5rem",
-                                    border: "1px solid #d1d5db",
-                                    background: "#ffffff",
-                                    fontSize: "0.9rem",
-                                    cursor: terms.length === 0 ? "not-allowed" : "pointer",
-                                }}
                             >
                                 ⇅
                             </button>
@@ -3209,7 +3109,6 @@ const TermSetup: React.FC = () => {
                             );
                         })()}
                     </div>
-                </div>
 
                 {(() => {
                     const termVal = selectedTerm === "" ? null : Number(selectedTerm);
@@ -4086,6 +3985,7 @@ const AdminPage: React.FC = () => {
                     <h1>Administrer oppmøtebøker</h1>
                     <p>Her kan du som administrator legge til, fjerne og redigere gruppetimer for de ulike
                         semesterne. </p>
+                    <TermSetup/>
                 </div>
 
                 <div id="statistics" className="visually-hidden">

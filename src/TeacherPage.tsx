@@ -701,7 +701,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                             }}
                             placeholder={selectedTerm ? "Skriv navnet på timen" : "Velg modul først"}
                             disabled={!selectedTerm}
-                            className="input-full field-height-100"
+                            className="input-100 field-height-100"
                         />
 
                         {/* Dropdown-forslag under input */}
