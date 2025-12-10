@@ -3,10 +3,7 @@ import React from "react";
 function Footer() {
     return (
         <footer>
-            <div className="container"
-                 style={{
-                     backgroundColor: "#FFE8D1 !important"
-                 }}>
+            <div className="container">
                 <div className="row row1">
                     <h2>Vi lytter til dere!</h2>
                     <p>

@@ -138,6 +138,7 @@
             background-color: rgba(255, 255, 255, 0.05);
         }
 
+
         /* remove underline on the very last row of the main table */
         > tbody > tr:last-child {
             border-bottom: none;
@@ -347,3 +348,12 @@
 
 }
 
+
+.admin-books-new-group {
+    margin-bottom: 2rem;
+}
+
+
+.class-group-table {
+    margin-bottom: 4rem;
+}

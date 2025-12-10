@@ -73,6 +73,8 @@ type RecentTime = {
 };
 
 function TeacherPage({ user }: TeacherPageProps) {
+    // Hvor lenge en økt skal være åpen (i sekunder). Endre denne for å justere nedtelling.
+    const SESSION_OPEN_SECONDS = 30;
     const [times, setTimes] = useState<TimeDoc[]>([]);
     const [selectedTerm, setSelectedTerm] = useState<number | null>(null);
     const [allowedTerms, setAllowedTerms] = useState<number[] | null>(null);
@@ -87,14 +89,16 @@ function TeacherPage({ user }: TeacherPageProps) {
     const [studentSearch, setStudentSearch] = useState("");
     const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
 
+    const studentSearchInputRef = useRef<HTMLInputElement | null>(null);
+
     // Bekreftelsesmodal for fjerning av registrert student
     const [deleteAttendeeModal, setDeleteAttendeeModal] = useState<{
         open: boolean;
         attendee: AttendanceRow | null;
     }>({ open: false, attendee: null });
 
-    // Session countdown (120s) state
-    const [remainingSeconds, setRemainingSeconds] = useState<number>(120);
+    // Session countdown state
+    const [remainingSeconds, setRemainingSeconds] = useState<number>(SESSION_OPEN_SECONDS);
 
     // Nylig registrerte timer (siste 4 timer)
     const [recentTimes, setRecentTimes] = useState<RecentTime[]>([]);
@@ -464,7 +468,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                 openedAt: nowTs,
             };
             setActiveSession(existing);
-            setRemainingSeconds(120);
+            setRemainingSeconds(30); //sekunder
             return; // Ikke opprett ny
         }
 
@@ -480,7 +484,7 @@ function TeacherPage({ user }: TeacherPageProps) {
             const nowTs = Timestamp.now();
             await updateDoc(ref, { isOpen: true, openedAt: nowTs } as any);
             setActiveSession({ ...activeSession, isOpen: true, openedAt: nowTs });
-            setRemainingSeconds(120);
+            setRemainingSeconds(SESSION_OPEN_SECONDS); // sekunder
         } else {
             await updateDoc(ref, { isOpen: false } as any);
             setActiveSession({ ...activeSession, isOpen: false });
@@ -517,8 +521,8 @@ function TeacherPage({ user }: TeacherPageProps) {
         const tick = async () => {
             const now = Date.now();
             const elapsed = Math.floor((now - openedMs) / 1000);
-            // TIME FOR QR CODE IN SECOUNDS
-            const left = Math.max(0, 60 - elapsed);
+            // TIME FOR QR CODE IN SECONDS
+            const left = Math.max(0, SESSION_OPEN_SECONDS - elapsed); // sekunder
             setRemainingSeconds(left);
             if (left === 0 && activeSession.isOpen) {
                 // Auto-close once
@@ -701,7 +705,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                             }}
                             placeholder={selectedTerm ? "Skriv navnet på timen" : "Velg modul først"}
                             disabled={!selectedTerm}
-                            className="input-100 field-height-100 thin-border"
+                            className="input100 field-height-100 thin-border"
                         />
 
                         {/* Dropdown-forslag under input */}
@@ -831,12 +835,12 @@ function TeacherPage({ user }: TeacherPageProps) {
                                 gap: "0.5rem",
                             }}
                         >
-                            <div style={{ fontWeight: 600, color: "#111827" }}>
+                            <div className="boldFont">
                                 {formatSeconds(remainingSeconds)}
                             </div>
                             <button
                                 onClick={handleCloseSession}
-                                className="button-black button-small"
+                                className="button-black button-small round-corners-whole25"
                             >
                                 {activeSession ? (activeSession.isOpen === false ? "Åpne økta" : "Lukk økt") : "Åpne økta"}
                             </button>
@@ -861,10 +865,10 @@ function TeacherPage({ user }: TeacherPageProps) {
                             >
                                 <tbody>
                                 {attendees.map((a) => (
-                                    <tr key={a.id}>
+                                    <tr key={a.id} className="">
                                         <td
                                             style={{
-                                                padding: "0.3rem",
+                                                padding: "0.75rem",
                                                 borderBottom: "1px solid #f3f4f6",
                                                 textAlign: "left",
                                             }}
@@ -877,6 +881,77 @@ function TeacherPage({ user }: TeacherPageProps) {
                                 </tbody>
                             </table>
                         )}
+
+                        <div style={{marginTop: "2rem"}}>
+                            <h4>Legg til student manuelt</h4>
+                            <div style={{position: "relative", marginTop: "0.75rem", width: "100%", maxWidth: 520}}>
+                                <input
+                                    ref={studentSearchInputRef}
+                                    value={studentSearch}
+                                    onChange={(e) => {
+                                        setStudentSearch(e.target.value);
+                                        setShowStudentSuggestions(true);
+                                    }}
+                                    onFocus={() => {
+                                        if (studentSearch.trim().length > 0) setShowStudentSuggestions(true);
+                                    }}
+                                    onBlur={() => {
+                                        // Delay to allow click on suggestion
+                                        setTimeout(() => setShowStudentSuggestions(false), 200);
+                                    }}
+                                    placeholder="Søk på navn, e-post eller telefon"
+                                    className="input100 field-height-100 thin-border"
+                                    disabled={!activeSession}
+                                />
+
+                                {/* Dropdown-forslag under input */}
+                                {showStudentSuggestions && filteredStudents.length > 0 && (
+                                    <ul
+                                        style={{
+                                            position: "absolute",
+                                            top: "100%",
+                                            left: 0,
+                                            right: 0,
+                                            zIndex: 10,
+                                            background: "white",
+                                            border: "1px solid #e5e7eb",
+                                            borderRadius: "0.5rem",
+                                            marginTop: "0.2rem",
+                                            listStyle: "none",
+                                            padding: 0,
+                                            maxHeight: "220px",
+                                            overflowY: "auto",
+                                            boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+                                        }}
+                                    >
+                                        {filteredStudents.map((s) => (
+                                            <li
+                                                key={s.id}
+                                                onClick={() => handleAddStudentManually(s)}
+                                                style={{
+                                                    padding: "0.4rem 0.6rem",
+                                                    cursor: "pointer",
+                                                    borderBottom: "1px solid #f3f4f6",
+                                                }}
+                                                onMouseDown={(e) => e.preventDefault()} // unngå blur før click
+                                            >
+                                                <div>{s.name || s.email}</div>
+                                                <div
+                                                    style={{
+                                                        fontSize: "0.75rem",
+                                                        color: "#6b7280",
+                                                    }}
+                                                >
+                                                    {s.email}
+                                                    {s.phone ? ` • ${s.phone}` : ""}
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+
                     </div>
 
                     {/* Overlegg med beskjed når ingen time er valgt */}

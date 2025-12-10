@@ -33,6 +33,11 @@ body {background-color: var(--color-background);}
     border-color: var(--color-white);
     color: var(--color-black) !important;
 }
+.button-red {
+    background-color: var(--color-red-l);
+    border-color: var(--color-red-l) !important;
+    color: var(--color-black) !important;
+}
 /* Button opacity */
 .button-opacity {opacity: 0.5;}
 

@@ -153,30 +153,13 @@ function StudentPage({user}: StudentPageProps) {
                 return;
             }
 
-            // Hvis flere økter har samme kode (historikk), forsøk å velge den som matcher studentens termin
-            let sessionDoc = snap.docs[0];
-            if (snap.docs.length > 1) {
-                const match = snap.docs.find((d) => {
-                    const data = d.data() as any;
-                    const termVal =
-                        typeof data?.term === "number" ? data.term : Number(data?.term);
-                    return Number.isFinite(termVal) && termVal === selectedTerm;
-                });
-                if (match) sessionDoc = match;
-            }
-            const sessionData = sessionDoc.data() as any;
-
-            // Termin-sperre: studenten kan kun registrere på økter i sin nåværende termin
+            // Finn studentens nåværende termin tidlig (for å velge riktig økt)
             const currentTerm =
                 typeof selectedTerm === "number"
                     ? selectedTerm
                     : typeof user.term === "number"
                         ? user.term
                         : null;
-            const sessionTerm =
-                typeof sessionData?.term === "number"
-                    ? sessionData.term
-                    : Number(sessionData?.term);
 
             if (currentTerm == null) {
                 setStatus("error");
@@ -189,18 +172,38 @@ function StudentPage({user}: StudentPageProps) {
                 return;
             }
 
-            if (!Number.isFinite(sessionTerm) || sessionTerm !== currentTerm) {
-                const sessLabel = Number.isFinite(sessionTerm)
-                    ? labelFromTerm(termOptions, sessionTerm as number)
-                    : "ukjent termin";
+            // Velg økt for studentens termin, og foretrekk en som er åpen
+            const sameTermDocs = snap.docs.filter((d) => {
+                const data = d.data() as any;
+                const termVal = typeof data?.term === "number" ? data.term : Number(data?.term);
+                return Number.isFinite(termVal) && termVal === currentTerm;
+            });
+
+            if (sameTermDocs.length === 0) {
                 const userLabel = labelFromTerm(termOptions, currentTerm);
-                // Vis spesifikk tekst kun dersom økten med koden faktisk er åpen
-                const isOpen = !!(sessionData && (sessionData as any).isOpen);
-                const msg = isOpen
-                    ? "Koden gjeder for en annen termin enn du er registert på. Kanskje underviseren har valgt feil termin?"
-                    : `Denne økten er for ${sessLabel}. Du er i ${userLabel}. Du kan bare registrere oppmøte for din egen termin.`;
                 setStatus("error");
-                setStatusMessage(msg);
+                setStatusMessage(`Denne koden gjelder ikke for din termin (${userLabel}).`);
+                setCode("");
+                setScanning(false);
+                setLoading(false);
+                return;
+            }
+
+            const openDocs = sameTermDocs
+                .filter((d) => !!((d.data() as any)?.isOpen))
+                .sort((a, b) => {
+                    const ao = ((a.data() as any)?.openedAt as Timestamp | undefined)?.toMillis?.() ?? 0;
+                    const bo = ((b.data() as any)?.openedAt as Timestamp | undefined)?.toMillis?.() ?? 0;
+                    return bo - ao; // nyeste først
+                });
+
+            const sessionDoc = (openDocs[0] ?? sameTermDocs[0]);
+            const sessionData = sessionDoc.data() as any;
+
+            // Sjekk at økten faktisk er åpen
+            if (!sessionData?.isOpen) {
+                setStatus("error");
+                setStatusMessage("Denne økten er lukket eller utløpt. Be underviseren åpne ny kode.");
                 setCode("");
                 setScanning(false);
                 setLoading(false);
@@ -551,11 +554,11 @@ function StudentPage({user}: StudentPageProps) {
         }
     };
 
-    // Auto-tilbake etter 3 sek (success) / 2 sek (error)
+    // Auto-tilbake etter 3 sek (success) / 2 sek (error) sekunder minutter
     useEffect(() => {
         if (status === "idle") return;
 
-        const timeoutMs = status === "success" ? 10000 : 2000;
+        const timeoutMs = status === "success" ? 4000 : 4000;
         const t = setTimeout(() => {
             resetToIdle();
         }, timeoutMs);

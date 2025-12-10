@@ -3042,10 +3042,10 @@ const TermSetup: React.FC = () => {
                             const canEditGroups = termVal != null && (hasName || hasOverride);
                             return (
                                 <>
-                                    <div className={`admin-books-rest admin-books-rest--split`}
+                                    <div className="admin-books-new-group"
                                          style={{display: "flex", gap: "0.5rem", flex: 1, minWidth: 0}}>
                                         <input
-                                            className="admin-books-select"
+                                            className="admin-books-select field-height-50 thin-border input50"
                                             type="text"
                                             placeholder="Ny gruppe..."
                                             value={newCategoryName}
@@ -3057,18 +3057,9 @@ const TermSetup: React.FC = () => {
                                                 }
                                             }}
                                             disabled={!canEditGroups}
-                                            style={{
-                                                flex: 1,
-                                                minWidth: 0,
-                                                padding: "0.35rem 0.5rem",
-                                                borderRadius: "0.5rem",
-                                                border: "1px solid #d1d5db",
-                                                opacity: canEditGroups ? 1 : 0.6,
-                                                cursor: canEditGroups ? "text" : "not-allowed",
-                                            }}
                                         />
                                         <button
-                                            className={"button-green admin-books-action"}
+                                            className={"button button-white thin-border round-corners-whole25 field-height-50 admin-books-action"}
                                             type="button"
                                             onClick={handleAddCategory}
                                             disabled={!canEditGroups}
@@ -3080,22 +3071,17 @@ const TermSetup: React.FC = () => {
                                                 opacity: canEditGroups ? 1 : 0.7,
                                             }}
                                         >
-                                            Legg til
+                                            Oprett ny gruppe
                                         </button>
                                     </div>
                                     {/* Sort groups button */}
                                     <button
-                                        className="admin-books-filter"
+                                        className="admin-books-filter button button-white thin-border round-corners-whole25"
                                         type="button"
                                         title="Sorter grupper"
                                         disabled={!canEditGroups || requirementsForTerm.length === 0}
                                         onClick={openGroupSort}
                                         style={{
-                                            padding: "0.35rem 0.5rem",
-                                            borderRadius: "0.5rem",
-                                            border: "1px solid #d1d5db",
-                                            background: "#ffffff",
-                                            fontSize: "0.9rem",
                                             cursor:
                                                 !canEditGroups || requirementsForTerm.length === 0
                                                     ? "not-allowed"
@@ -3123,7 +3109,7 @@ const TermSetup: React.FC = () => {
                             Ingen grupper definert ennå for {labelForTerm(selectedTerm as number)}.
                         </p>
                     ) : (
-                        <div style={{display: "flex", flexDirection: "column", gap: "1rem"}}>
+                        <div>
                             {requirementsForTerm.map((req) => {
                                 const key = req.id;
                                 const catTimes = timesForTerm
@@ -3145,12 +3131,7 @@ const TermSetup: React.FC = () => {
                                 return (
                                     <div
                                         key={req.id}
-                                        style={{
-                                            borderRadius: "0.75rem",
-                                            border: "1px solid #e5e7eb",
-                                            padding: "0.75rem 0.75rem",
-                                            backgroundColor: "#f9fafb",
-                                        }}
+                                        className="class-group-table"
                                     >
                                         <div
                                             style={{
@@ -3242,12 +3223,8 @@ const TermSetup: React.FC = () => {
                                                     </>
                                                 ) : (
                                                     <div
-                                                        style={{
-                                                            fontWeight: 600,
-                                                            fontSize: "0.95rem",
-                                                        }}
                                                     >
-                                                        {req.category} ({req.requiredCount}/{totalInGroup})
+                                                        <h2 className="boldFont">{req.category} <span className="thinFont">({req.requiredCount}/{totalInGroup})</span></h2>
                                                     </div>
                                                 )}
                                             </div>
@@ -3262,18 +3239,13 @@ const TermSetup: React.FC = () => {
                                             >
                                                 {/* Endre / Lagre gruppe */}
                                                 <button
-                                                    className={"button-green admin-books-action"}
+                                                    className={"button button-black round-corners-whole25"}
                                                     type="button"
                                                     onClick={() =>
                                                         isEditingReq
                                                             ? void handleSaveRequirement(req)
                                                             : startEditRequirement(req)
                                                     }
-                                                    style={{
-                                                        padding: "0.45rem 0.9rem",
-                                                        cursor: "pointer",
-                                                        whiteSpace: "nowrap",
-                                                    }}
                                                 >
                                                     {isEditingReq ? "Lagre" : "Endre navn"}
                                                 </button>
@@ -3288,30 +3260,15 @@ const TermSetup: React.FC = () => {
                                                             category: req.category
                                                         })
                                                     }
-                                                    style={{
-                                                        padding: "0.25rem 0.6rem",
-                                                        borderRadius: "999px",
-                                                        border: "none",
-                                                        backgroundColor: "#fee2e2",
-                                                        color: "#991b1b",
-                                                        fontSize: "0.75rem",
-                                                        cursor: "pointer",
-                                                    }}
+                                                    className="button button-small button-red round-corners-whole25"
                                                 >
-                                                    Slett gruppe
+                                                    Slett
                                                 </button>
                                             </div>
                                         </div>
 
                                         {catTimes.length > 0 ? (
-                                            <ul
-                                                style={{
-                                                    listStyle: "none",
-                                                    paddingLeft: 0,
-                                                    margin: "0 0 0.5rem 0",
-                                                    fontSize: "0.85rem",
-                                                }}
-                                            >
+                                            <ul>
                                                 {catTimes.map((t) => {
                                                     const isEditing = editingTimeId === t.id;
 
@@ -3322,7 +3279,7 @@ const TermSetup: React.FC = () => {
                                                                 display: "flex",
                                                                 alignItems: "center",
                                                                 justifyContent: "space-between",
-                                                                padding: "0.15rem 0",
+                                                                padding: "0.5rem 0",
                                                                 borderBottom: "1px dashed #e5e7eb",
                                                                 gap: "0.5rem",
                                                             }}
@@ -3367,15 +3324,7 @@ const TermSetup: React.FC = () => {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => void handleRenameTime(t)}
-                                                                        style={{
-                                                                            padding: "0.15rem 0.45rem",
-                                                                            borderRadius: "999px",
-                                                                            border: "none",
-                                                                            backgroundColor: "#e5e7eb",
-                                                                            color: "#111827",
-                                                                            fontSize: "0.75rem",
-                                                                            cursor: "pointer",
-                                                                        }}
+                                                                        className="button button-small button-colorless"
                                                                     >
                                                                         Lagre
                                                                     </button>
@@ -3386,15 +3335,7 @@ const TermSetup: React.FC = () => {
                                                                             setEditingTimeId(t.id);
                                                                             setEditingTimeName(t.name);
                                                                         }}
-                                                                        style={{
-                                                                            padding: "0.15rem 0.45rem",
-                                                                            borderRadius: "999px",
-                                                                            border: "none",
-                                                                            backgroundColor: "#e5e7eb",
-                                                                            color: "#111827",
-                                                                            fontSize: "0.75rem",
-                                                                            cursor: "pointer",
-                                                                        }}
+                                                                        className="button button-small button-colorless"
                                                                     >
                                                                         Endre
                                                                     </button>
@@ -3404,15 +3345,7 @@ const TermSetup: React.FC = () => {
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => openDeleteTimeModal(t)}
-                                                                    style={{
-                                                                        padding: "0.15rem 0.45rem",
-                                                                        borderRadius: "999px",
-                                                                        border: "none",
-                                                                        backgroundColor: "#fee2e2",
-                                                                        color: "#b91c1c",
-                                                                        fontSize: "0.75rem",
-                                                                        cursor: "pointer",
-                                                                    }}
+                                                                    className="button button-small thin-border button-red round-corners-whole25"
                                                                 >
                                                                     Slett
                                                                 </button>
@@ -3443,6 +3376,7 @@ const TermSetup: React.FC = () => {
                                             <input
                                                 type="text"
                                                 placeholder="Ny time..."
+                                                className="input thin-border round-corners-whole25"
                                                 value={newTimeName}
                                                 onChange={(e) =>
                                                     setNewTimeNameByReq((prev) => ({
@@ -3456,26 +3390,11 @@ const TermSetup: React.FC = () => {
                                                         void handleAddTime(req);
                                                     }
                                                 }}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: "0.3rem 0.5rem",
-                                                    borderRadius: "0.5rem",
-                                                    border: "1px solid #d1d5db",
-                                                    fontSize: "0.85rem",
-                                                }}
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => handleAddTime(req)}
-                                                style={{
-                                                    padding: "0.35rem 0.8rem",
-                                                    borderRadius: "999px",
-                                                    border: "none",
-                                                    backgroundColor: "#4b5563",
-                                                    color: "#ffffff",
-                                                    fontSize: "0.8rem",
-                                                    cursor: "pointer",
-                                                }}
+                                                className="button button-small button-colorless thin-border round-corners-whole25"
                                             >
                                                 Legg til time
                                             </button>
@@ -3602,49 +3521,37 @@ const TermSetup: React.FC = () => {
                         <div
                             className="page-card"
                             style={{
+                                display: "flex",
+                                flexDirection: "column",
                                 maxWidth: 520,
                                 width: "100%",
                                 background: "#ffffff",
+                                alignContent: "center",
                             }}
                         >
-                            <h3 style={{marginTop: 0}}>Slett gruppe?</h3>
-                            <p style={{whiteSpace: "pre-wrap", lineHeight: 1.4}}>
-                                {`Du er i ferd med å slette gruppen «${deleteGroupModal.req.category}».\n\n`}
-                                {`Dette vil også slette alle tilhørende timer i denne gruppen for valgt termin (${deleteGroupModal.timeCount}).\n`}
-                                {`Handlingen kan ikke angres.`}
+                            <h3 style={{marginTop: "1rem"}}>Slett gruppe?</h3>
+                            <p style={{marginTop: "1rem", lineHeight: 1.4}}>
+                                {`Du er i ferd med å slette gruppen «${deleteGroupModal.req.category}». Dette vil også slette alle tilhørende timer i denne gruppen for valgt termin (${deleteGroupModal.timeCount}). Handlingen kan ikke angres.`}
                             </p>
                             <div
                                 style={{
                                     display: "flex",
                                     gap: "0.5rem",
-                                    justifyContent: "flex-end",
-                                    marginTop: "0.75rem",
+                                    justifyContent: "center",
+                                    marginTop: "1rem",
                                 }}
                             >
                                 <button
                                     type="button"
                                     onClick={cancelDeleteGroupModal}
-                                    style={{
-                                        padding: "0.45rem 0.9rem",
-                                        borderRadius: "999px",
-                                        border: "1px solid #d1d5db",
-                                        background: "#ffffff",
-                                        cursor: "pointer",
-                                    }}
+                                    className="button button-small button-colorless thin-border round-corners-whole25"
                                 >
                                     Avbryt
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => void confirmDeleteGroupModal()}
-                                    style={{
-                                        padding: "0.45rem 0.9rem",
-                                        borderRadius: "999px",
-                                        border: "none",
-                                        background: "#ef4444",
-                                        color: "#ffffff",
-                                        cursor: "pointer",
-                                    }}
+                                    className="button button-small button-red thin-border round-corners-whole25"
                                 >
                                     Slett gruppe
                                 </button>
@@ -3675,9 +3582,12 @@ const TermSetup: React.FC = () => {
                                 maxWidth: 520,
                                 width: "100%",
                                 background: "#ffffff",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.5rem",
                             }}
                         >
-                            <h3 style={{marginTop: 0}}>Slett time?</h3>
+                            <h3 style={{marginTop: "1rem"}}>Slett time?</h3>
                             <p style={{whiteSpace: "pre-wrap", lineHeight: 1.4}}>
                                 {`Du er i ferd med å slette timen «${deleteTimeModal.time.name}» i gruppen «${deleteTimeModal.time.category}» for ${labelForTerm(deleteTimeModal.time.term)}.\n\n`}
                                 {`Historiske sesjoner beholdes, men timen forsvinner fra admin-oppsettet.\n`}
@@ -3694,27 +3604,14 @@ const TermSetup: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={cancelDeleteTimeModal}
-                                    style={{
-                                        padding: "0.45rem 0.9rem",
-                                        borderRadius: "999px",
-                                        border: "1px solid #d1d5db",
-                                        background: "#ffffff",
-                                        cursor: "pointer",
-                                    }}
+                                    className="button button-small button-colorless thin-border round-corners-whole25"
                                 >
                                     Avbryt
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => void confirmDeleteTimeModal()}
-                                    style={{
-                                        padding: "0.45rem 0.9rem",
-                                        borderRadius: "999px",
-                                        border: "none",
-                                        background: "#ef4444",
-                                        color: "#ffffff",
-                                        cursor: "pointer",
-                                    }}
+                                    className="button button-small button-red thin-border round-corners-whole25"
                                 >
                                     Slett time
                                 </button>
@@ -3809,13 +3706,7 @@ const TermSetup: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => void saveTermOrder()}
-                                style={{
-                                    padding: "0.35rem 0.7rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    background: "#16a34a",
-                                    color: "#fff"
-                                }}
+                                className="button button-small button-black round-corners-whole25"
                             >
                                 Lagre rekkefølge
                             </button>
@@ -3897,25 +3788,14 @@ const TermSetup: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setShowGroupSort(false)}
-                                style={{
-                                    padding: "0.35rem 0.7rem",
-                                    borderRadius: "999px",
-                                    border: "1px solid #d1d5db",
-                                    background: "#fff"
-                                }}
+                                className="button button-small button-white thin-border round-corners-whole25"
                             >
                                 Avbryt
                             </button>
                             <button
                                 type="button"
                                 onClick={() => void saveGroupOrder()}
-                                style={{
-                                    padding: "0.35rem 0.7rem",
-                                    borderRadius: "999px",
-                                    border: "none",
-                                    background: "#16a34a",
-                                    color: "#fff"
-                                }}
+                                className="button button-small button-black thin-border round-corners-whole25"
                             >
                                 Lagre rekkefølge
                             </button>
