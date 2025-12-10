@@ -236,13 +236,25 @@
     }
 }
 
+.teacher-recent-sessions {
+    table {
+        > tbody > tr > td:nth-child(2) {
+        }
+
+        text-align: right;
+    }
+}
+
 .teacher-card {
+    align-content: flex-start;
     h2 {
         margin-bottom: 1.75rem;
     }
     .termButtons {
         margin-top: 4rem;
     }
+
+    min-height: 70vh;
 }
 
 .admin-page {

@@ -609,9 +609,9 @@ function TeacherPage({ user }: TeacherPageProps) {
     return (
         <>
                 <div className="card teacher-card full-border round-corners-whole100">
-                <h2 className="boldFont">
+                <h1 className="boldFont">
                     Finn timen din
-                </h2>
+                </h1>
 
                 {/* Termin øverst, time under */}
                 <section style={{
@@ -701,7 +701,7 @@ function TeacherPage({ user }: TeacherPageProps) {
                             }}
                             placeholder={selectedTerm ? "Skriv navnet på timen" : "Velg modul først"}
                             disabled={!selectedTerm}
-                            className="input-100 field-height-100"
+                            className="input-100 field-height-100 thin-border"
                         />
 
                         {/* Dropdown-forslag under input */}
@@ -750,126 +750,162 @@ function TeacherPage({ user }: TeacherPageProps) {
                         )}
                     </div>
                 </section>
-                {activeSession && (
-                        <section
-                            ref={sessionRef}
-                            style={{
-                                marginTop: "2rem",
-                                padding: "1rem",
-                            }}
-                        >
+                <section
+                    ref={sessionRef}
+                    style={{
+                        marginTop: "2rem",
+                        padding: "1rem",
+                        position: "relative",
+                    }}
+                >
 
-                            {/* QR + kode under (blurred if session is closed) */}
-                            <div style={{ marginTop: "1rem", position: "relative" }}>
-                                <div
-                                    style={{
-                                        filter: activeSession.isOpen === false ? "blur(6px)" : "none",
-                                        pointerEvents: "none",
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        alignItems: "center",
-                                        gap: "0.5rem",
-                                    }}
-                                >
-                                    <QRCodeCanvas
-                                        value={activeSession.code}
-                                        size={140}
-                                    />
-                                    <div
-                                        style={{
-                                            fontSize: "2rem",
-                                            fontWeight: "bold",
-                                            letterSpacing: "0.3em",
-                                        }}
-                                    >
-                                        {activeSession.code}
-                                    </div>
-                                </div>
-                                {activeSession.isOpen === false && (
-                                    <div
-                                        style={{
-                                            position: "absolute",
-                                            inset: 0,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                        }}
-                                    >
-                                        <div
-                                            style={{
-                                                background: "rgba(255,255,255,0.85)",
-                                                padding: "0.5rem 0.75rem",
-                                                borderRadius: "0.5rem",
-                                                border: "1px solid #e5e7eb",
-                                                fontWeight: 600,
-                                                color: "#6b7280",
-                                            }}
-                                        >
-                                            Økten er lukket
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Nedtelling over knappen, begge sentrert */}
+                    {/* Alt innhold under her vises alltid, men blir blurret og deaktivert
+                        når ingen time er valgt eller når økten er lukket */}
+                    <div
+                        style={{
+                            // Blur hele seksjonen kun når ingen time er valgt
+                            filter: !activeSession ? "blur(6px)" : "none",
+                            pointerEvents: !activeSession ? "none" : undefined,
+                        }}
+                    >
+                        {/* QR + kode under */}
+                        <div style={{ marginTop: "1rem", position: "relative" }}>
                             <div
                                 style={{
-                                    marginTop: "1.2rem",
+                                    filter: activeSession?.isOpen === false ? "blur(6px)" : "none",
+                                    pointerEvents: "none",
                                     display: "flex",
                                     flexDirection: "column",
                                     alignItems: "center",
-                                    justifyContent: "center",
                                     gap: "0.5rem",
                                 }}
                             >
-                                <div style={{ fontWeight: 600, color: "#111827" }}>
-                                    {formatSeconds(remainingSeconds)}
+                                <QRCodeCanvas
+                                    value={activeSession?.code ?? ""}
+                                    size={140}
+                                />
+                                <div
+                                    style={{
+                                        fontSize: "2rem",
+                                        fontWeight: "bold",
+                                        letterSpacing: "0.3em",
+                                    }}
+                                >
+                                    {activeSession?.code ?? "—"}
                                 </div>
-                                <button
-                                    onClick={handleCloseSession}
-                                    className="button-black button-small"
-                                >
-                                    {activeSession.isOpen === false ? "Åpne økta" : "Lukk økt"}
-                                </button>
                             </div>
-
-                            <hr style={{
-                                margin: "2rem 0",
-                                borderWidth: "1.25px",
-                                borderStyle: "solid",
-                                borderColor: "var(--color-black)"
-                            }} />
-
-                            <h4>{attendees.length} {attendees.length === 1 ? ("registert student") : ("registrerte studenter")}</h4>
-                            {attendees.length === 0 ? (
-                                <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
-                                    Ingen har registrert seg ennå.
-                                </p>
-                            ) : (
-                                <table
-                                    style={{ width: "100%", borderCollapse: "collapse" }}
-                                    className="table-container"
+                            {activeSession?.isOpen === false && (
+                                <div
+                                    style={{
+                                        position: "absolute",
+                                        inset: 0,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                    }}
                                 >
-                                    <tbody>
-                                    {attendees.map((a) => (
-                                        <tr key={a.id}>
-                                            <td
-                                                style={{
-                                                    padding: "0.3rem",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                    textAlign: "left",
-                                                }}
-                                                onClick={() => handleRemoveAttendee(a)}
-                                            >
-                                                {a.studentName || "-"}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    </tbody>
-                                </table>
+                                    <div
+                                        style={{
+                                            background: "rgba(255,255,255,0.85)",
+                                            padding: "0.5rem 0.75rem",
+                                            borderRadius: "0.5rem",
+                                            border: "1px solid #e5e7eb",
+                                            fontWeight: 600,
+                                            color: "#6b7280",
+                                        }}
+                                    >
+                                        Økten er lukket
+                                    </div>
+                                </div>
                             )}
-                        </section>
-                    )}
+                        </div>
+
+                        {/* Nedtelling over knappen, begge sentrert */}
+                        <div
+                            style={{
+                                marginTop: "1.2rem",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "0.5rem",
+                            }}
+                        >
+                            <div style={{ fontWeight: 600, color: "#111827" }}>
+                                {formatSeconds(remainingSeconds)}
+                            </div>
+                            <button
+                                onClick={handleCloseSession}
+                                className="button-black button-small"
+                            >
+                                {activeSession ? (activeSession.isOpen === false ? "Åpne økta" : "Lukk økt") : "Åpne økta"}
+                            </button>
+                        </div>
+
+                        <hr style={{
+                            margin: "2rem 0",
+                            borderWidth: "1.25px",
+                            borderStyle: "solid",
+                            borderColor: "var(--color-black)"
+                        }} />
+
+                        <h4>{attendees.length} {attendees.length === 1 ? ("registert student") : ("registrerte studenter")}</h4>
+                        {attendees.length === 0 ? (
+                            <p style={{ fontSize: "0.9rem", color: "#6b7280" }}>
+                                Ingen har registrert seg ennå.
+                            </p>
+                        ) : (
+                            <table
+                                style={{ width: "100%", borderCollapse: "collapse" }}
+                                className="table-container"
+                            >
+                                <tbody>
+                                {attendees.map((a) => (
+                                    <tr key={a.id}>
+                                        <td
+                                            style={{
+                                                padding: "0.3rem",
+                                                borderBottom: "1px solid #f3f4f6",
+                                                textAlign: "left",
+                                            }}
+                                            onClick={() => handleRemoveAttendee(a)}
+                                        >
+                                            {a.studentName || "-"}
+                                        </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+
+                    {/* Overlegg med beskjed når ingen time er valgt */}
+                    {!activeSession ? (
+                        <div
+                            style={{
+                                position: "absolute",
+                                inset: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    background: "rgba(255,255,255,0.85)",
+                                    padding: "0.5rem 0.75rem",
+                                    borderRadius: "0.5rem",
+                                    border: "1px solid #e5e7eb",
+                                    fontWeight: 600,
+                                    color: "#6b7280",
+                                    textAlign: "center",
+                                }}
+                            >
+                                {"Velg time for å åpne QR kode"}
+                            </div>
+                        </div>
+                    ) : null}
+                </section>
             </div>
 
                     {/* Nylig registrerte timer (kun når ingen aktiv økt) */}
