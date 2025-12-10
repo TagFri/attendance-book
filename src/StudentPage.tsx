@@ -748,6 +748,7 @@ function StudentPage({user}: StudentPageProps) {
                                             <React.Fragment key={s.category}>
                                                 <tr
                                                     onClick={() => toggleCategory(s.category)}
+                                                    className="main-table-overview-row"
                                                 >
                                                     <td className="requirement-meet-icon">
                                                         {metRequirement ? (
